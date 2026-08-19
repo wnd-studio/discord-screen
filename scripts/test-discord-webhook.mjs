@@ -18,4 +18,15 @@ const request = new Request('https://example.test/api/discord/events', {
 
 assert.equal(await verifyDiscordRequest(request, body, { DISCORD_PUBLIC_KEY: rawPublicKey }), true);
 assert.equal(await verifyDiscordRequest(request, `${body} `, { DISCORD_PUBLIC_KEY: rawPublicKey }), false);
+
+const realFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async (url) => {
+    assert.equal(String(url), 'https://discord.com/api/v10/oauth2/applications/test-app/rpc');
+    return Response.json({ verify_key: rawPublicKey });
+  };
+  assert.equal(await verifyDiscordRequest(request, body, { DISCORD_CLIENT_ID: 'test-app' }), true);
+} finally {
+  globalThis.fetch = realFetch;
+}
 console.log('Assinatura dos webhooks do Discord: OK');
