@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Como não compartilhar tela no Discord</title>
+    <link rel="icon" type="image/png" href="/brand/wnd-neutral.png" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -16,7 +17,7 @@
       <main id="grid" class="grid"></main>
 
       <div id="empty" class="empty">
-        <div class="icon">🖥️</div>
+        <img class="empty-logo" src="/brand/wnd-neutral.png" alt="WND Studio" />
         <h1 id="emptyTitle">Conectando…</h1>
         <p id="emptyText" class="muted">Entrando na sala</p>
       </div>
@@ -24,9 +25,12 @@
       <!-- Lobby: escolher ou criar sala antes de entrar -->
       <div id="lobby" class="lobby" hidden>
         <header class="lobby-head">
-          <div>
-            <h1>Salas</h1>
-            <p class="muted">Neste canal de voz</p>
+          <div class="lobby-brand">
+            <img class="lobby-logo" src="/brand/wnd-calm.png" alt="WND Studio" />
+            <div>
+              <h1>Salas</h1>
+              <p class="muted">Neste canal de voz</p>
+            </div>
           </div>
           <div class="lobby-actions">
             <button id="lobbyUser" class="user-chip" title="Seu perfil" hidden></button>

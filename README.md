@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://cdn.discordapp.com/app-icons/1539449081527803925/2a48530cf46b16af0e11df6da6979af7.png?size=256" width="120" alt="Ícone do Screen Share">
+  <img src="client/public/brand/wnd-calm.png" width="120" alt="Ícone da WND Studio">
 
   <h1>Screen Share</h1>
 

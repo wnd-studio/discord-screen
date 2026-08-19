@@ -48,6 +48,34 @@ const el = (tag, className, text) => {
 
 function empty(text) { return el('div', 'empty-state', text); }
 
+const brandAvatars = [
+  '/brand/wnd-calm.png',
+  '/brand/wnd-dizzy.png',
+  '/brand/wnd-neutral.png',
+];
+
+function brandAvatarFor(value = '') {
+  let hash = 0;
+  for (const character of String(value)) hash = ((hash * 31) + character.charCodeAt(0)) >>> 0;
+  return brandAvatars[hash % brandAvatars.length];
+}
+
+function participantAvatar(person) {
+  const image = document.createElement('img');
+  const fallback = brandAvatarFor(person.id);
+  image.className = 'participant-avatar';
+  image.alt = '';
+  image.src = /^\d{15,21}$/.test(person.id || '') && /^(?:a_)?[0-9a-f]{32}$/.test(person.avatar || '')
+    ? `/api/avatar/${person.id}/${person.avatar}`
+    : fallback;
+  image.addEventListener('error', () => {
+    image.classList.add('brand-fallback');
+    image.src = fallback;
+  }, { once: true });
+  if (image.src.endsWith(fallback)) image.classList.add('brand-fallback');
+  return image;
+}
+
 async function action(payload, confirmation) {
   if (confirmation && !confirm(confirmation)) return;
   try {
@@ -118,7 +146,7 @@ function roomCard(room) {
     const row = el('div', 'participant');
     const text = el('span', 'participant-name', person.name || person.id);
     text.title = person.id;
-    row.append(text, el('span', 'role', person.role === 'broadcaster' ? 'transmissor' : 'espectador'));
+    row.append(participantAvatar(person), text, el('span', 'role', person.role === 'broadcaster' ? 'transmissor' : 'espectador'));
     const disconnect = el('button', 'button secondary small', 'Desconectar');
     disconnect.onclick = () => {
       const why = reason('Desconectado pela administração');
@@ -158,8 +186,18 @@ function renderServers(servers) {
       image.className = 'server-icon';
       image.alt = '';
       image.src = `https://cdn.discordapp.com/icons/${server.guildId}/${server.icon}.webp?size=64`;
+      image.addEventListener('error', () => {
+        image.classList.add('brand-fallback');
+        image.src = '/brand/wnd-dizzy.png';
+      }, { once: true });
       cell.append(image);
-    } else cell.append(el('span', 'server-icon', (server.name || '?').slice(0, 1).toUpperCase()));
+    } else {
+      const image = document.createElement('img');
+      image.className = 'server-icon brand-fallback';
+      image.src = '/brand/wnd-dizzy.png';
+      image.alt = '';
+      cell.append(image);
+    }
     const names = el('span', 'server-name');
     names.append(el('strong', '', server.name || 'Servidor sem nome'), el('small', '', server.guildId));
     cell.append(names);

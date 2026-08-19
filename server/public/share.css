@@ -37,6 +37,25 @@ body {
   padding: 28px;
 }
 
+.share-brand {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 24px;
+}
+
+.share-brand img {
+  width: 54px;
+  aspect-ratio: 1;
+  padding: 5px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #5865f2, #343b91);
+  object-fit: contain;
+  box-shadow: 0 11px 27px rgba(88, 101, 242, 0.24);
+}
+
+.share-brand .sub { margin-bottom: 0; }
+
 h1 {
   margin: 0 0 4px;
   font-size: 22px;

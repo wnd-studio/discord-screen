@@ -4,17 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Compartilhar tela</title>
+    <link rel="icon" type="image/png" href="/brand/wnd-neutral.png" />
     <!-- ?v= existe porque share.js/css têm nome fixo. Quem abriu a página antes
          dos cabeçalhos no-store guardou a versão antiga por heurística do
          navegador, e continuaria usando ela para sempre. Trocar a query força
          uma URL nova. Incremente ao publicar mudanças nesses arquivos. -->
-    <link rel="stylesheet" href="/share.css?v=9" />
+    <link rel="stylesheet" href="/share.css?v=10" />
   </head>
   <body>
     <main class="card">
-      <header>
-        <h1>Compartilhar tela</h1>
-        <p class="sub" id="roomLine">Carregando…</p>
+      <header class="share-brand">
+        <img src="/brand/wnd-neutral.png" alt="WND Studio" />
+        <div>
+          <h1>Compartilhar tela</h1>
+          <p class="sub" id="roomLine">Carregando…</p>
+        </div>
       </header>
 
       <section id="setup">
