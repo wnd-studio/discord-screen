@@ -5,6 +5,7 @@ export { RoomRegistry } from './registry.js';
 
 const WEB_INSTANCE = 'web';
 const ROOM_NAME_MAX = 40;
+const ROOM_TOKEN_TTL = 8 * 60 * 60;
 
 function originFor(request, env) {
   return String(env.PUBLIC_ORIGIN || new URL(request.url).origin).replace(/\/+$/, '');
@@ -45,14 +46,24 @@ async function issueIdentity(env, instance, uid, name, avatar, ttl = 8 * 60 * 60
   };
 }
 
-async function issueRoomTokens(request, env, roomId, me) {
+async function issueRoomTokens(request, env, roomId, me, room = null) {
   const base = { room: roomId, uid: me.uid, name: me.name, avatar: me.av ?? null };
-  const viewerToken = await signToken({ ...base, role: 'viewer' }, env.SESSION_SECRET);
-  const broadcasterToken = await signToken({ ...base, role: 'broadcaster' }, env.SESSION_SECRET);
+  const viewerToken = await signToken(
+    { ...base, role: 'viewer' }, env.SESSION_SECRET, ROOM_TOKEN_TTL
+  );
+  const broadcasterToken = await signToken(
+    { ...base, role: 'broadcaster' }, env.SESSION_SECRET, ROOM_TOKEN_TTL
+  );
+  const inviteToken = await signToken(
+    { room: roomId, scope: 'invite' }, env.SESSION_SECRET, ROOM_TOKEN_TTL
+  );
   return {
     roomId,
+    roomName: room?.name ?? null,
+    listed: room?.listed !== false,
     viewerToken,
     shareUrl: `${originFor(request, env)}/share.html?t=${encodeURIComponent(broadcasterToken)}`,
+    inviteUrl: `${originFor(request, env)}/?sala=${encodeURIComponent(roomId)}&convite=${encodeURIComponent(inviteToken)}`,
   };
 }
 
@@ -135,22 +146,29 @@ async function api(request, env, url) {
     const room = {
       id: crypto.randomUUID().replace(/-/g, '').slice(0, 12), instance: me.instance,
       name: (chosen || `Sala de ${me.name}`).slice(0, ROOM_NAME_MAX), ownerId: me.uid,
-      ownerName: me.name, password: data.password || null, isCall: false, createdAt: Date.now(),
+      ownerName: me.name, password: data.password || null, listed: data.private !== true,
+      isCall: false, createdAt: Date.now(),
     };
     const put = await internal(registry(env), '/put', { ...room, locked: Boolean(room.password) });
     if (!put.response.ok) return json(put.data, put.response.status);
     await internal(roomStub(env, room.id), '/init', room);
-    return json(await issueRoomTokens(request, env, room.id, me));
+    return json(await issueRoomTokens(request, env, room.id, me, room));
   }
 
   if (url.pathname === '/api/rooms/call' && request.method === 'POST') {
     const me = await identityOf(data, env);
     if (!me) return error('identidade invalida ou expirada', 401);
     const id = me.call ? `call-${me.call}` : `atividade-${me.instance}`;
-    const room = { id, instance: me.instance, name: 'Sala da call', ownerId: null, ownerName: 'a call', password: null, isCall: true, createdAt: Date.now() };
+    const room = { id, instance: me.instance, name: 'Sala da call', ownerId: null, ownerName: 'a call', password: null, listed: false, isCall: true, createdAt: Date.now() };
     await internal(registry(env), '/put', { ...room, locked: false });
     await internal(roomStub(env, id), '/init', room);
-    return json(await issueRoomTokens(request, env, id, me));
+    const access = await internal(roomStub(env, id), '/access/check', { uid: me.uid });
+    if (!access.data.ok) return error(
+      access.data.reason === 'cheia' ? 'Sala cheia. Tente novamente em instantes.' : 'Você foi removido desta sala.',
+      access.data.reason === 'cheia' ? 409 : 403,
+      { reason: access.data.reason }
+    );
+    return json(await issueRoomTokens(request, env, id, me, room));
   }
 
   if (url.pathname === '/api/rooms/join' && request.method === 'POST') {
@@ -163,20 +181,36 @@ async function api(request, env, url) {
     const expectedCall = me.call ? `call-${me.call}` : `atividade-${me.instance}`;
     if (room.isCall && room.id !== expectedCall) return error('Entre na call para acessar esta sala.', 403);
     if (!room.isCall && room.instance !== me.instance) return error('Sala não existe mais.', 404);
+    if (!room.isCall && room.listed === false && room.ownerId !== me.uid) {
+      const invite = await verifyToken(data.invite, env.SESSION_SECRET);
+      if (invite?.scope !== 'invite' || invite.room !== room.id) {
+        return error('Este convite é inválido ou expirou. Peça um link novo.', 403, { reason: 'convite' });
+      }
+    }
     if (!room.isCall) {
       const checked = await internal(stub, '/password/check', { password: data.password });
       if (!checked.data.ok) return error(checked.data.reason === 'bloqueado' ? `Muitas tentativas. Tente de novo em ${checked.data.seconds}s.` : 'Senha incorreta.', checked.data.reason === 'bloqueado' ? 429 : 403, { reason: checked.data.reason });
     }
-    return json(await issueRoomTokens(request, env, room.id, me));
+    const access = await internal(stub, '/access/check', { uid: me.uid });
+    if (!access.data.ok) return error(
+      access.data.reason === 'cheia' ? 'Sala cheia. O limite atual é de 50 espectadores.' : 'Você foi removido desta sala.',
+      access.data.reason === 'cheia' ? 409 : 403,
+      { reason: access.data.reason }
+    );
+    return json(await issueRoomTokens(request, env, room.id, me, room));
   }
 
-  if (url.pathname === '/api/rooms/password' && request.method === 'POST') {
+  if ((url.pathname === '/api/rooms/password' || url.pathname === '/api/rooms/settings') && request.method === 'POST') {
     const me = await identityOf(data, env);
     if (!me) return error('identidade invalida ou expirada', 401);
     const stub = roomStub(env, String(data.roomId || 'missing'));
     const meta = await internal(stub, '/meta', null, 'GET');
     if (!meta.response.ok || meta.data.room.instance !== me.instance) return error('Sala não existe mais.', 404);
-    const result = await internal(stub, '/password/set', { uid: me.uid, password: data.password || null });
+    const result = await internal(stub, '/settings', {
+      uid: me.uid,
+      password: data.password || null,
+      listed: url.pathname === '/api/rooms/settings' ? data.listed !== false : meta.data.room.listed !== false,
+    });
     return json(result.data, result.response.status);
   }
 
@@ -239,5 +273,3 @@ export default {
     return withSecurityHeaders(response);
   },
 };
-
-
