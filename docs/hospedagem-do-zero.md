@@ -206,7 +206,7 @@ No campo `TARGET`, não inclua `https://`. Essa é uma regra do proxy de Activit
 
 Confirme também em **Activities → Settings** que a Activity está habilitada para Web/Desktop.
 
-### Eventos de instalação e remoção
+### Eventos de autorização e desautorização
 
 Em **Webhooks**, configure o endpoint:
 
@@ -216,6 +216,8 @@ https://discord-screen.SEUSUBDOMINIO.workers.dev/api/discord/events
 
 Ative os eventos `APPLICATION_AUTHORIZED` e `APPLICATION_DEAUTHORIZED` e salve. O Discord fará
 um teste assinado automaticamente; o Worker valida essa assinatura antes de aceitar qualquer dado.
+O primeiro evento pode identificar o servidor. O segundo informa somente o usuário, então o painel
+mantém o servidor como parte do histórico e usa a contagem aproximada do Discord para o total atual.
 
 ## 9. Testar a instalação
 

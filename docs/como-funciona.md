@@ -64,6 +64,11 @@ oficiais de autorização e desautorização da aplicação. A chave pública e 
 de proprietários são descobertas por Client Credentials; nenhum segredo é enviado
 ao navegador.
 
+O evento de autorização inclui o servidor quando a instalação é feita nesse contexto.
+Já o evento de desautorização informa somente o usuário, sem identificar o servidor.
+Por isso o painel preserva o histórico de uso/autorização por servidor e exibe a
+contagem aproximada atual fornecida pelo Discord, sem atribuir a remoção ao servidor errado.
+
 ## Segurança
 
 - tokens são HMAC-SHA-256 via Web Crypto;
