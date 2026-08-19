@@ -158,7 +158,10 @@ Regras importantes:
 - não envie `.production.vars` para ninguém;
 - o arquivo `.production.vars` já está incluído no `.gitignore`.
 
-`DISCORD_BOT_TOKEN` é opcional e não é necessário para a instalação básica.
+`DISCORD_BOT_TOKEN` é opcional e não é necessário para a instalação básica. Também são opcionais:
+
+- `ADMIN_DISCORD_IDS`: IDs extras que podem entrar em `/admin`, separados por vírgula. O proprietário e a equipe da aplicação já são reconhecidos automaticamente;
+- `DISCORD_PUBLIC_KEY`: chave pública dos webhooks. Normalmente o Worker a descobre automaticamente pela API do Discord.
 
 ## 7. Fazer o primeiro deploy
 
@@ -203,7 +206,24 @@ No campo `TARGET`, não inclua `https://`. Essa é uma regra do proxy de Activit
 
 Confirme também em **Activities → Settings** que a Activity está habilitada para Web/Desktop.
 
+### Eventos de instalação e remoção
+
+Em **Webhooks**, configure o endpoint:
+
+```text
+https://discord-screen.SEUSUBDOMINIO.workers.dev/api/discord/events
+```
+
+Ative os eventos `APPLICATION_AUTHORIZED` e `APPLICATION_DEAUTHORIZED` e salve. O Discord fará
+um teste assinado automaticamente; o Worker valida essa assinatura antes de aceitar qualquer dado.
+
 ## 9. Testar a instalação
+
+### Teste do painel administrativo
+
+Abra `https://discord-screen.SEUSUBDOMINIO.workers.dev/admin`, entre com a conta proprietária da
+aplicação e confirme que a visão geral aparece. O histórico começa vazio e é preenchido conforme a
+Atividade volta a ser usada.
 
 ### Teste pelo navegador
 
