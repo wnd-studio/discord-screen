@@ -41,7 +41,7 @@
       <div id="createModal" class="modal" hidden>
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="createTitle">
           <h2 id="createTitle">Criar sala</h2>
-          <p class="modal-sub">A sala fecha sozinha quando fica vazia por alguns minutos.</p>
+          <p class="modal-sub">A sala fecha sozinha pouco depois que todos saem.</p>
 
           <label class="field-col">
             <span>Nome <em class="opt">(opcional)</em></span>
@@ -51,6 +51,11 @@
           <label class="field-col field-gap">
             <span>Senha <em class="opt">(opcional)</em></span>
             <input id="createPass" type="password" maxlength="64" autocomplete="new-password" />
+          </label>
+
+          <label class="field-check field-gap">
+            <input id="createPrivate" type="checkbox" />
+            <span>Sala privada <em class="opt">— somente pelo link</em></span>
           </label>
 
           <div class="modal-actions">
@@ -87,6 +92,11 @@
           <label class="field-col">
             <span>Senha <em class="opt">(vazio remove)</em></span>
             <input id="roomPass" type="password" maxlength="64" autocomplete="new-password" />
+          </label>
+
+          <label class="field-check field-gap">
+            <input id="roomPrivate" type="checkbox" />
+            <span>Sala privada <em class="opt">— esconder da lista</em></span>
           </label>
 
           <div class="modal-actions">
@@ -184,10 +194,22 @@
 
           <div class="group">
             <button
+              id="inviteRoom"
+              class="btn"
+              data-tip="Copiar convite"
+              aria-label="Copiar convite"
+              hidden
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+            <button
               id="roomSettings"
               class="btn"
-              data-tip="Senha da sala"
-              aria-label="Senha da sala"
+              data-tip="Ajustes da sala"
+              aria-label="Ajustes da sala"
               hidden
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
