@@ -32,6 +32,8 @@
     <a href="https://discord-screen.wendellsilvaa012.workers.dev/privacidade">Privacidade</a>
     ·
     <a href="docs/como-funciona.md">Documentação técnica</a>
+    ·
+    <a href="docs/hospedagem-do-zero.md">Hospede sua versão</a>
   </p>
 </div>
 
@@ -60,6 +62,22 @@ Em vez de continuar criando configurações específicas para cada plataforma, o
 - a aplicação é executada sob demanda, sem depender de um servidor Node ligado continuamente.
 
 Com isso, o serviço pode permanecer publicado 24 horas por dia. As transmissões ativas continuam sujeitas às cotas do plano Cloudflare utilizado.
+
+## Hospede sua própria versão
+
+Quer instalar o projeto no seu computador ou publicar uma cópia independente? O guia abaixo começa do zero e acompanha todo o processo:
+
+- instalação do Git, Node.js e pnpm;
+- download do repositório;
+- criação da aplicação no Discord;
+- configuração segura dos secrets;
+- primeiro deploy na Cloudflare;
+- Redirect URI, URL Mapping e link de instalação;
+- testes e solução dos problemas mais comuns.
+
+### [Abrir o guia completo de hospedagem →](docs/hospedagem-do-zero.md)
+
+O guia utiliza apenas serviços gratuitos para a configuração inicial. As cotas do plano Cloudflare continuam valendo para transmissões ativas.
 
 ## Como usar no Discord
 
@@ -151,6 +169,8 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 <details>
 <summary><strong>Executar o projeto localmente</strong></summary>
 
+> Para uma instalação começando do zero, consulte o [guia completo de hospedagem](docs/hospedagem-do-zero.md).
+
 ### Pré-requisitos
 
 - Node.js 20.19+ ou 22.12+;
@@ -208,6 +228,8 @@ openssl rand -base64 48
 <details>
 <summary><strong>Publicar na Cloudflare</strong></summary>
 
+> Esta é a referência resumida. Iniciantes devem seguir o [guia completo de hospedagem](docs/hospedagem-do-zero.md), que também cobre a criação das contas e da aplicação Discord.
+
 1. Instale as dependências e autentique o Wrangler:
 
    ```bash
@@ -215,22 +237,16 @@ openssl rand -base64 48
    pnpm exec wrangler login
    ```
 
-2. Cadastre os secrets, um comando de cada vez:
+2. Copie `.production.vars.example` para `.production.vars` e preencha os quatro secrets obrigatórios.
+
+3. Faça o primeiro deploy enviando todos os secrets de forma protegida:
 
    ```bash
-   pnpm exec wrangler secret put DISCORD_CLIENT_ID
-   pnpm exec wrangler secret put DISCORD_CLIENT_SECRET
-   pnpm exec wrangler secret put SESSION_SECRET
-   pnpm exec wrangler secret put PUBLIC_ORIGIN
+   pnpm build
+   pnpm exec wrangler deploy --secrets-file .production.vars
    ```
 
-3. Se utilizar a verificação de presença na chamada, cadastre também:
-
-   ```bash
-   pnpm exec wrangler secret put DISCORD_BOT_TOKEN
-   ```
-
-4. Publique o Worker, os assets e os Durable Objects:
+4. Nos deploys seguintes, os secrets são preservados e basta executar:
 
    ```bash
    pnpm deploy
@@ -248,7 +264,7 @@ Para utilizar domínio próprio, abra **Cloudflare Dashboard → Workers & Pages
 Para a URL pública `https://tela.seudominio.com`, configure:
 
 - **OAuth2 Redirect URI:** `https://tela.seudominio.com/auth/callback`
-- **Activities → URL Mappings → `/`:** `https://tela.seudominio.com`
+- **Activities → URL Mappings → `/`:** `tela.seudominio.com` (sem `https://`)
 - **Installation Contexts:** `User Install` e `Guild Install`
 - **Default Install Scope:** `applications.commands`
 
