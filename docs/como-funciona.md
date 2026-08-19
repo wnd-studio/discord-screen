@@ -45,7 +45,7 @@ e a entrada no índice.
 ## Segurança
 
 - tokens são HMAC-SHA-256 via Web Crypto;
-- senhas usam PBKDF2-SHA-256 com salt aleatório e 120 mil iterações;
+- senhas usam PBKDF2-SHA-256 com salt aleatório e 100 mil iterações (máximo suportado pelo runtime da Cloudflare);
 - há limite e bloqueio temporário para tentativas de senha;
 - tokens de identidade não abrem WebSocket de sala;
 - um broadcaster só injeta pacotes no slot que recebeu;
