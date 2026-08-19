@@ -528,7 +528,7 @@ function openProfile() {
   $('profileId').textContent = inDiscord ? `Discord · ${session.user.id}` : 'modo local';
   $('profileInput').value = me.name;
 
-  $('profileModal').hidden = false;
+  $('profileModal').hidden = false;
   $('profileInput').focus();
   $('profileInput').select();
 }
@@ -708,7 +708,24 @@ function buildPeopleList() {
       row.append(dot);
     }
     // textContent, nunca innerHTML: nome vem do Discord, é conteúdo de terceiro.
-    row.append(document.createTextNode(p.id === session?.user?.id ? `${p.name} (você)` : p.name));
+    const label = document.createElement('span');
+    label.className = 'hover-row-name';
+    label.textContent = p.id === session?.user?.id ? `${p.name} (você)` : p.name;
+    row.append(label);
+
+    const iOwnTheRoom = lastRoomState?.ownerId === session?.user?.id;
+    if (iOwnTheRoom && p.id !== session?.user?.id) {
+      const kick = document.createElement('button');
+      kick.type = 'button';
+      kick.className = 'hover-kick';
+      kick.textContent = 'Remover';
+      kick.addEventListener('click', (event) => {
+        event.stopPropagation();
+        ws?.send(JSON.stringify({ type: 'kick', userId: p.id }));
+        toast(`${p.name} foi removido da sala.`);
+      });
+      row.append(kick);
+    }
     list.append(row);
   }
 
@@ -898,9 +915,10 @@ async function boot() {
 
   // Lido antes de showLobby, que limpa o parâmetro da URL ao voltar ao lobby.
   const alvo = new URLSearchParams(location.search).get('sala');
+  const convite = new URLSearchParams(location.search).get('convite');
 
   await showLobby();
-  if (session && alvo) await joinById(alvo);
+  if (session && alvo) await joinById(alvo, convite);
 }
 
 /** Abre a sala desta call, criando-a na primeira pessoa que chega. */
@@ -1055,6 +1073,7 @@ async function showLobby() {
   $('empty').hidden = true;
   $('roomPill').hidden = true;
   $('leaveRoom').hidden = true;
+  $('inviteRoom').hidden = true;
   $('roomSettings').hidden = true;
   $('share').hidden = true;
   $('liveSettings').hidden = true;
@@ -1160,13 +1179,35 @@ async function enterRoom(room, password) {
       identity: session.identity,
       roomId: room.id,
       password: password ?? '',
+      invite: room.invite ?? null,
     });
-    openRoom(tokens, room);
+    openRoom(tokens, {
+      ...room,
+      name: tokens.roomName || room.name,
+      listed: tokens.listed,
+    });
   } catch (err) {
+    if (err.reason === 'convite') {
+      toast(err.detail || 'Este convite expirou. Peça um link novo.', true);
+      setRoomUrl(null);
+      loadRooms();
+      return;
+    }
+    if (err.reason === 'removido') {
+      toast('Você foi removido desta sala.', true);
+      remove(`sala:${room.id}`);
+      setRoomUrl(null);
+      loadRooms();
+      return;
+    }
     // 403 numa sala trancada é o caminho normal: pedir a senha.
     if (err.status === 403 && !password) return askPassword(room);
     if (err.status === 403) return askPassword(room, 'Senha incorreta.');
     if (err.status === 429) return askPassword(room, err.detail);
+    if (err.status === 409) {
+      toast(err.detail || 'A sala está cheia.', true);
+      return;
+    }
     if (err.status === 404) {
       toast('Essa sala já fechou.', true);
       remove(`sala:${room.id}`);
@@ -1184,7 +1225,7 @@ function askPassword(room, error) {
   $('joinError').textContent = error ?? '';
   $('joinError').hidden = !error;
   if (!error) $('joinPass').value = '';
-  $('joinModal').hidden = false;
+  $('joinModal').hidden = false;
   $('joinPass').focus();
 }
 
@@ -1194,7 +1235,7 @@ function askPassword(room, error) {
  * Serve para os dois casos: recarregar a página estando numa sala, e abrir um
  * link `?sala=<id>` que alguém mandou.
  */
-async function joinById(id) {
+async function joinById(id, invite = null) {
   // Token guardado de uma visita anterior: entra sem pedir a senha de novo.
   const saved = read(`sala:${id}`);
   if (saved) {
@@ -1210,7 +1251,7 @@ async function joinById(id) {
   // Link recebido de fora: usa o fluxo normal, que pede a senha quando precisa.
   // O nome vem da lista já carregada; salas com senha também aparecem nela.
   const known = lobbyRooms.find((r) => r.id === id);
-  await enterRoom(known ?? { id, name: 'Sala' });
+  await enterRoom({ ...(known ?? { id, name: 'Sala' }), invite });
 }
 
 /** Mantém `?sala=` na barra de endereço, preservando os parâmetros do Discord. */
@@ -1218,15 +1259,22 @@ function setRoomUrl(id) {
   const url = new URL(location.href);
   if (id) url.searchParams.set('sala', id);
   else url.searchParams.delete('sala');
+  // Depois de entrar o convite fica guardado nos tokens locais, não na barra
+  // do navegador nem no histórico.
+  url.searchParams.delete('convite');
   history.replaceState(null, '', url);
 }
 
 function openRoom(tokens, room) {
   roomTokens = tokens;
-  roomInfo = room;
+  roomInfo = {
+    ...room,
+    name: tokens.roomName || room.name,
+    listed: tokens.listed ?? room.listed,
+  };
 
-  setRoomUrl(room.id);
-  store(`sala:${room.id}`, JSON.stringify({ tokens, name: room.name }));
+  setRoomUrl(roomInfo.id);
+  store(`sala:${roomInfo.id}`, JSON.stringify({ tokens, name: roomInfo.name }));
 
   $('lobby').hidden = true;
   $('empty').hidden = false;
@@ -1240,12 +1288,13 @@ function openRoom(tokens, room) {
   // confundir esta: quem fecha a atividade é o próprio Discord.
   $('roomPill').hidden = inDiscord;
   $('leaveRoom').hidden = inDiscord;
+  $('inviteRoom').hidden = inDiscord;
 
   clearInterval(lobbyTimer);
   lobbyTimer = null;
-  $('roomPill').textContent = room.name;
+  $('roomPill').textContent = roomInfo.name;
 
-  setEmpty('Entrando…', room.name);
+  setEmpty('Entrando…', roomInfo.name);
   connect();
 }
 
@@ -1419,6 +1468,7 @@ async function post(url, body, { retry = true } = {}) {
     const err = new Error(data.error ?? `Servidor respondeu ${r.status}.`);
     err.status = r.status;
     err.detail = data.error;
+    err.reason = data.reason;
     throw err;
   }
   return data;
@@ -1468,11 +1518,18 @@ function connect() {
     if (msg.type === 'state') {
       participants = msg.participants ?? [];
       lastRoomState = msg.room ?? null;
+      if (roomInfo && lastRoomState) {
+        roomInfo.name = lastRoomState.name || roomInfo.name;
+        roomInfo.listed = lastRoomState.listed;
+      }
 
       // A senha da sala só aparece para quem a criou.
-      $('roomPill').textContent = `${lastRoomState?.locked ? '🔒 ' : ''}${lastRoomState?.name ?? ''}`;
+      const roomFlags = `${lastRoomState?.locked ? '🔒 ' : ''}${lastRoomState?.listed === false ? '🔗 ' : ''}`;
+      $('roomPill').textContent = `${roomFlags}${lastRoomState?.name ?? ''}`;
       $('roomSettings').hidden = lastRoomState?.ownerId !== session?.user?.id;
-      $('roomSettings').classList.toggle('on', Boolean(lastRoomState?.locked));
+      $('roomSettings').classList.toggle(
+        'on', Boolean(lastRoomState?.locked || lastRoomState?.listed === false)
+      );
 
       // Limpa o que sumiu sem stream-stop (queda abrupta, por exemplo).
       const live = new Set((msg.streams ?? []).map((s) => s.slot));
@@ -1518,6 +1575,9 @@ function connect() {
         toast('A sala foi fechada.', true);
         showLobby();
       }
+    } else if (msg.type === 'kicked') {
+      toast('Você foi removido desta sala.', true);
+      showLobby();
     } else if (msg.type === 'error') {
       toast(msg.message, true);
     }
@@ -1626,7 +1686,7 @@ function openModal(mode) {
     $('mFps').value = String(s.fps);
   }
 
-  $('modal').hidden = false;
+  $('modal').hidden = false;
 }
 
 $('liveSettings').addEventListener('click', () => openModal('live'));
@@ -1792,7 +1852,8 @@ $('newRoom').addEventListener('click', () => {
   if (!session) return;
   $('createName').value = '';
   $('createPass').value = '';
-  $('createModal').hidden = false;
+  $('createPrivate').checked = false;
+  $('createModal').hidden = false;
   $('createName').focus();
 });
 
@@ -1809,6 +1870,7 @@ $('createGo').addEventListener('click', async () => {
       identity: session.identity,
       name,
       password: $('createPass').value || null,
+      private: $('createPrivate').checked,
     });
     $('createModal').hidden = true;
     openRoom(tokens, {
@@ -1816,7 +1878,11 @@ $('createGo').addEventListener('click', async () => {
       // O servidor decide o nome quando fica em branco.
       name: name || `Sala de ${session.user.name}`,
       owner: session.user.name,
+      listed: !$('createPrivate').checked,
     });
+    if ($('createPrivate').checked) {
+      toast('Sala privada criada. Use o botão de link para convidar.');
+    }
   } catch (err) {
     toast(err.message, true);
   }
@@ -1844,13 +1910,14 @@ $('roomModal').addEventListener('click', (e) => {
 
 $('roomSave').addEventListener('click', async () => {
   try {
-    const r = await post(`${P}/api/rooms/password`, {
+    const r = await post(`${P}/api/rooms/settings`, {
       identity: session.identity,
       roomId: roomTokens.roomId,
       password: $('roomPass').value || '',
+      listed: !$('roomPrivate').checked,
     });
     $('roomModal').hidden = true;
-    toast(r.locked ? 'Sala protegida com senha.' : 'Senha removida.');
+    toast(r.listed ? 'Ajustes salvos.' : 'Sala privada. Entre somente pelo link.');
   } catch (err) {
     toast(err.message, true);
   }
@@ -1859,11 +1926,27 @@ $('roomSave').addEventListener('click', async () => {
 function openRoomSettings() {
   $('roomSub').textContent = roomInfo?.name ?? '';
   $('roomPass').value = '';
-  $('roomModal').hidden = false;
+  $('roomPrivate').checked = lastRoomState?.listed === false;
+  $('roomModal').hidden = false;
   $('roomPass').focus();
 }
 
 $('roomSettings').addEventListener('click', openRoomSettings);
+
+$('inviteRoom').addEventListener('click', async () => {
+  if (!roomTokens?.roomId) return;
+  const invite = roomTokens.inviteUrl || (() => {
+    const fallback = new URL(location.origin);
+    fallback.searchParams.set('sala', roomTokens.roomId);
+    return fallback.toString();
+  })();
+  try {
+    await navigator.clipboard.writeText(invite);
+    toast('Link da sala copiado.');
+  } catch {
+    window.prompt('Copie o link da sala:', invite);
+  }
+});
 
 // ----------------------------------------------------------------- painel
 
