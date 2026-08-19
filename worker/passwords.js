@@ -1,4 +1,5 @@
 const encoder = new TextEncoder();
+const PBKDF2_ITERATIONS = 100_000;
 
 function encode(bytes) {
   let binary = '';
@@ -15,7 +16,7 @@ async function derive(password, salt) {
     'raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']
   );
   return new Uint8Array(await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 120_000 }, material, 256
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITERATIONS }, material, 256
   ));
 }
 
