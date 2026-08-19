@@ -120,6 +120,7 @@ publicado.
 | `pnpm build` | monta o frontend e reúne os assets públicos |
 | `pnpm dev` | inicia Worker e Durable Objects localmente |
 | `pnpm check` | valida o bundle com dry-run do Wrangler |
+| `pnpm smoke` | testa HTTP, salas, senha, WebSocket e relay contra `pnpm dev` |
 | `pnpm deploy` | build e publicação na Cloudflare |
 | `pnpm cf:typegen` | gera tipos dos bindings Cloudflare |
 
@@ -133,5 +134,4 @@ publicado.
 - A captura e reprodução dependem de WebCodecs; navegadores sem suporte completo
   podem não transmitir ou assistir corretamente.
 - Até quatro transmissores simultâneos por sala, preservando o limite original.
-
 
