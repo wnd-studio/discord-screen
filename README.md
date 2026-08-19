@@ -129,8 +129,11 @@ publicado.
 - Compartilhar tela no celular continua indisponível por restrição do navegador.
 - A transmissão usa relay WebSocket, não WebRTC/SFU; cada espectador multiplica
   a saída e o número prático depende dos limites de CPU/memória do Durable Object.
-- O plano gratuito tem cotas de requisições e uso de Durable Objects. Uso intenso
-  ou muitas salas simultâneas pode exigir o plano pago.
+- O plano gratuito tem cotas diárias. A Cloudflare contabiliza mensagens
+  WebSocket recebidas na proporção 20:1; uma transmissão contínua a 60 fps usa
+  cerca de 10,8 mil requisições faturáveis por hora, antes das chamadas HTTP.
+  Portanto, o serviço pode ficar publicado 24/7 sem custo, mas streaming intenso
+  ou mais de uma sala continuamente ativa pode exigir o plano pago.
 - A captura e reprodução dependem de WebCodecs; navegadores sem suporte completo
   podem não transmitir ou assistir corretamente.
 - Até quatro transmissores simultâneos por sala, preservando o limite original.

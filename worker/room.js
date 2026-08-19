@@ -64,6 +64,9 @@ export class Room extends DurableObject {
           droppedChunks: 0,
         };
         await this.ctx.storage.put('meta', this.meta);
+        // Uma sala criada mas nunca conectada também precisa expirar; sem este
+        // alarm ela ficaria presa no índice e consumiria o limite da instância.
+        await this.ctx.storage.setAlarm(Date.now() + EMPTY_GRACE_MS);
       } else if (this.meta.isCall) {
         const data = await request.json();
         this.meta.instance = data.instance;
@@ -295,5 +298,4 @@ export class Room extends DurableObject {
     });
   }
 }
-
 
