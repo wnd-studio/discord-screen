@@ -92,19 +92,12 @@ function setEmpty(title, text) {
   $('emptyText').textContent = text;
 }
 
-/** Cor estável por usuário — mesma pessoa, mesma cor, em qualquer sessão. */
-function colorFor(id) {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return `hsl(${Math.abs(hash) % 360} 45% 42%)`;
-}
-
 /**
  * Avatares passam pelo nosso próprio servidor, não pelo CDN do Discord.
  *
  * O CSP da Activity bloqueia cdn.discordapp.com, e o proxy do Discord só
  * repassa domínios mapeados no portal do desenvolvedor — sem esse mapeamento a
- * foto caía sempre nas iniciais. Pela nossa rota a URL é a mesma dentro e fora
+ * foto caía sempre no avatar de marca. Pela nossa rota a URL é a mesma dentro e fora
  * da Activity, e não depende de configuração que ninguém lembra de fazer.
  */
 function avatarUrl(p) {
@@ -112,13 +105,12 @@ function avatarUrl(p) {
   return `${P}/api/avatar/${p.id}/${p.avatar}`;
 }
 
-function initials(name) {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => [...w][0] ?? '')
-    .join('')
-    .toUpperCase();
+const brandAvatars = [`${P}/brand/wnd-calm.png`, `${P}/brand/wnd-dizzy.png`, `${P}/brand/wnd-neutral.png`];
+
+function brandAvatarFor(id) {
+  const value = String(id || 'wnd');
+  const index = [...value].reduce((sum, char) => sum + char.charCodeAt(0), 0) % brandAvatars.length;
+  return brandAvatars[index];
 }
 
 const slotOf = (userId) =>
@@ -664,11 +656,11 @@ function buildAvatar(p) {
   const url = avatarUrl(p);
 
   const fallback = () => {
-    const div = document.createElement('div');
-    div.className = 'avatar';
-    div.style.background = colorFor(p.id);
-    div.textContent = initials(p.name);
-    return div;
+    const image = document.createElement('img');
+    image.className = 'avatar brand-fallback';
+    image.src = brandAvatarFor(p.id);
+    image.alt = p.name || 'Avatar WND Studio';
+    return image;
   };
 
   if (!url) return fallback();

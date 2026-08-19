@@ -449,6 +449,12 @@ body {
   user-select: none;
 }
 
+.avatar.brand-fallback {
+  padding: 4px;
+  object-fit: contain;
+  background: linear-gradient(145deg, #5865f2, #343b91);
+}
+
 /* -------------------------------------------------------------------- badge */
 
 /* Nome e plateia lado a lado: posicionar cada um por conta exigiria saber a
@@ -630,10 +636,15 @@ body {
   min-height: 0;
 }
 
-.empty .icon {
-  font-size: 42px;
-  margin-bottom: 10px;
-  opacity: 0.8;
+.empty-logo {
+  width: 88px;
+  aspect-ratio: 1;
+  margin-bottom: 14px;
+  padding: 7px;
+  border-radius: 25px;
+  background: linear-gradient(145deg, #5865f2, #343b91);
+  object-fit: contain;
+  box-shadow: 0 14px 34px rgba(88, 101, 242, 0.24);
 }
 
 .empty h1 {
@@ -951,6 +962,22 @@ button {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 22px;
+}
+
+.lobby-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.lobby-logo {
+  width: 45px;
+  aspect-ratio: 1;
+  padding: 4px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #5865f2, #343b91);
+  object-fit: contain;
+  box-shadow: 0 10px 26px rgba(88, 101, 242, 0.2);
 }
 
 .lobby-head h1 {
@@ -1309,6 +1336,17 @@ button {
    o que a pessoa foi ver. Os botões perdem o rótulo e ficam só com o ícone —
    texto ali roubaria a largura da própria tela. */
 @media (max-width: 620px), (max-height: 460px) {
+  .lobby-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .lobby-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .grid,
   .grid.palco {
     padding: 8px;
