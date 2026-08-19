@@ -1,0 +1,9 @@
+# Copie para .dev.vars apenas para desenvolvimento local.
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+DISCORD_BOT_TOKEN=
+SESSION_SECRET=
+PUBLIC_ORIGIN=http://localhost:8787
+ENVIRONMENT=development
+
+

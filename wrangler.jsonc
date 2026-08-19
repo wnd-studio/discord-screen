@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "discord-screen",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./client/dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/auth/*", "/ws", "/.proxy/*"],
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": { "bindings": [
+    { "name": "ROOMS", "class_name": "Room" },
+    { "name": "ROOM_INDEX", "class_name": "RoomRegistry" }
+  ] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "RoomRegistry"] }],
+  "secrets": {
+    "required": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "SESSION_SECRET", "PUBLIC_ORIGIN"]
+  },
+  "vars": { "ENVIRONMENT": "production" },
+  "observability": { "enabled": true }
+}
+
