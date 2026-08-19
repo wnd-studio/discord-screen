@@ -12,6 +12,8 @@
    sala possui seu próprio `Room` Durable Object.
 5. Viewer e broadcaster abrem `/ws?t=...`; o Worker valida o token e encaminha o
    upgrade ao objeto da sala.
+6. Salas privadas continuam acessíveis pelo link, mas não aparecem na lista
+   pública. O dono pode alternar essa opção sem recriar a sala.
 
 ## Captura e transmissão
 
@@ -19,7 +21,8 @@ A Discord Activity roda em iframe sem permissão `display-capture`, então a
 captura continua numa aba normal (`share.html`). `shared/broadcaster.js` usa
 `getDisplayMedia` e WebCodecs. O Durable Object não decodifica mídia: valida o
 slot e retransmite o pacote binário apenas aos espectadores que enviaram
-`watch`.
+`watch`. Quando não há nenhum espectador assistindo à tela, o transmissor fecha
+os frames sem codificá-los e não envia áudio/vídeo, reduzindo o consumo da cota.
 
 Formato preservado:
 
@@ -30,9 +33,9 @@ Formato preservado:
 Eventos de controle preservados:
 
 - broadcaster → sala: `start`, `config`, `audio-config`, `stop`;
-- viewer → sala: `rename`, `watch`, `unwatch`, `stop-broadcast`;
+- viewer → sala: `rename`, `watch`, `unwatch`, `stop-broadcast`, `kick` (dono);
 - sala → clientes: `state`, `stream-start`, `config`, `audio-config`,
-  `stream-stop`, `need-keyframe`, `stop-request`, `error`.
+  `stream-stop`, `need-keyframe`, `stop-request`, `kicked`, `error`.
 
 ## Estado e hibernação
 
@@ -45,8 +48,11 @@ e a entrada no índice.
 ## Segurança
 
 - tokens são HMAC-SHA-256 via Web Crypto;
+- tokens de sala expiram em 8 horas;
 - senhas usam PBKDF2-SHA-256 com salt aleatório e 100 mil iterações (máximo suportado pelo runtime da Cloudflare);
 - há limite e bloqueio temporário para tentativas de senha;
+- participantes removidos não conseguem reconectar enquanto a sala existir;
+- cada sala aceita até 50 espectadores e 4 transmissores simultâneos;
 - tokens de identidade não abrem WebSocket de sala;
 - um broadcaster só injeta pacotes no slot que recebeu;
 - avatar proxy aceita apenas ID/hash no formato Discord;
@@ -66,5 +72,3 @@ server/public/        captura, termos e privacidade (somente assets estáticos)
 shared/               pipeline WebCodecs compartilhado
 wrangler.jsonc        assets, bindings e migrations Cloudflare
 ```
-
-
