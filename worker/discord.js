@@ -71,6 +71,17 @@ export async function applicationMetadata(env) {
   }
 }
 
+async function publicApplication(clientId) {
+  if (!clientId) return null;
+  try {
+    const response = await fetch(`${API}/oauth2/applications/${encodeURIComponent(clientId)}/rpc`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function currentGuild(accessToken, guildId) {
   if (!accessToken || !guildId) return null;
   try {
@@ -96,7 +107,10 @@ export async function verifyDiscordRequest(request, rawBody, env) {
   const signature = hexBytes(request.headers.get('x-signature-ed25519') || '');
   const timestamp = request.headers.get('x-signature-timestamp') || '';
   let publicKeyHex = env.DISCORD_PUBLIC_KEY || '';
-  if (!publicKeyHex) publicKeyHex = (await applicationMetadata(env))?.verify_key || '';
+  if (!publicKeyHex) {
+    const application = await publicApplication(env.DISCORD_CLIENT_ID) || await applicationMetadata(env);
+    publicKeyHex = application?.verify_key || '';
+  }
   const publicKey = hexBytes(publicKeyHex);
   if (!signature || !timestamp || !publicKey) return false;
 
