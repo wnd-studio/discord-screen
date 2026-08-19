@@ -9,7 +9,7 @@
     "dev": "wrangler dev",
     "build": "node scripts/build-worker.mjs",
     "check": "wrangler deploy --dry-run",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "pnpm build && wrangler deploy",
     "cf:typegen": "wrangler types"
   },
   "devDependencies": {
