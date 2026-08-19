@@ -18,7 +18,7 @@ Veja os detalhes do protocolo em [docs/como-funciona.md](docs/como-funciona.md).
 
 ## Pré-requisitos
 
-- Node.js 20 ou mais recente;
+- Node.js 20.19+ ou 22.12+;
 - pnpm 11;
 - conta Cloudflare com Workers habilitado;
 - aplicação no Discord Developer Portal.
