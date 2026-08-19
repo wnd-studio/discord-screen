@@ -104,6 +104,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Senha opcional para salas web | ✅ Disponível |
 | Convites com prazo de validade | ✅ Expiram em 8 horas |
 | Remoção de participantes pelo dono | ✅ Disponível nas salas web |
+| Exclusão manual da sala pelo dono | ✅ Disponível nas salas web |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Áudio de abas do navegador | ✅ Opus |
 | Múltiplos transmissores | ✅ Até 4 por sala |
@@ -292,4 +293,3 @@ Se utilizar um endereço `workers.dev`, coloque exatamente esse mesmo host nos c
 <div align="center">
   Desenvolvido como uma alternativa leve para transmissões de estudo e colaboração em comunidade.
 </div>
-

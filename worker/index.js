@@ -214,6 +214,18 @@ async function api(request, env, url) {
     return json(result.data, result.response.status);
   }
 
+  if (url.pathname === '/api/rooms/delete' && request.method === 'POST') {
+    const me = await identityOf(data, env);
+    if (!me) return error('identidade invalida ou expirada', 401);
+    const stub = roomStub(env, String(data.roomId || 'missing'));
+    const meta = await internal(stub, '/meta', null, 'GET');
+    if (!meta.response.ok || meta.data.room.instance !== me.instance) {
+      return error('Sala não existe mais.', 404);
+    }
+    const result = await internal(stub, '/delete', { uid: me.uid });
+    return json(result.data, result.response.status);
+  }
+
   const avatar = url.pathname.match(/^\/api\/avatar\/(\d{15,21})\/((?:a_)?[0-9a-f]{32})$/);
   if (avatar) {
     const upstream = await fetch(`https://cdn.discordapp.com/avatars/${avatar[1]}/${avatar[2]}.png?size=128`, { cf: { cacheTtl: 86400, cacheEverything: true } });

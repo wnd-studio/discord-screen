@@ -84,6 +84,12 @@ export class Room extends DurableObject {
     if (!this.meta) return json({ error: 'Sala não existe mais.' }, 404);
     if (url.pathname === '/meta') return json({ room: this.publicMeta() });
     if (url.pathname === '/summary') {
+      // Repara salas criadas por versões antigas que ficaram vazias sem um
+      // alarm de limpeza. Consultar o lobby basta para recolocá-las no ciclo
+      // normal de expiração.
+      if (!this.ctx.getWebSockets().length && await this.ctx.storage.getAlarm() === null) {
+        await this.ctx.storage.setAlarm(Date.now() + EMPTY_GRACE_MS);
+      }
       const ids = new Set();
       for (const { a } of this.viewers()) ids.add(a.uid);
       for (const { a } of this.broadcasters()) ids.add(a.uid);
@@ -145,6 +151,29 @@ export class Room extends DurableObject {
         locked: Boolean(this.meta.password),
         listed: this.meta.listed !== false,
       });
+    }
+
+    if (url.pathname === '/delete' && request.method === 'POST') {
+      const { uid } = await request.json().catch(() => ({}));
+      if (this.meta.isCall) {
+        return json({ error: 'A sala da chamada é encerrada automaticamente.' }, 403);
+      }
+      if (uid !== this.meta.ownerId) {
+        return json({ error: 'Só quem criou a sala pode excluí-la.' }, 403);
+      }
+
+      const roomId = this.meta.id;
+      await this.ctx.storage.deleteAlarm();
+      await this.registry('/delete', { id: roomId });
+
+      for (const socket of this.ctx.getWebSockets()) {
+        safeSend(socket, JSON.stringify({ type: 'room-deleted' }));
+        socket.close(1000, 'Sala excluída pelo dono');
+      }
+
+      await this.ctx.storage.deleteAll();
+      this.meta = null;
+      return json({ ok: true });
     }
 
     return new Response('Not found', { status: 404 });
@@ -299,6 +328,7 @@ export class Room extends DurableObject {
   webSocketError(ws) { this.disconnected(ws); }
 
   disconnected(ws) {
+    if (!this.meta) return;
     const a = this.attachment(ws);
     if (a.role === 'broadcaster' && a.streaming) {
       for (const viewer of this.sockets('viewer')) safeSend(viewer, JSON.stringify({ type: 'stream-stop', slot: a.slot }));
@@ -339,6 +369,7 @@ export class Room extends DurableObject {
   }
 
   async alarm() {
+    if (!this.meta) return;
     if (this.ctx.getWebSockets().length) return;
     await this.registry('/delete', { id: this.meta.id });
     await this.ctx.storage.deleteAll();
