@@ -5,3 +5,7 @@ dist/
 .DS_Store
 .cache/
 site/
+.dev.vars
+.wrangler/
+work/
+
