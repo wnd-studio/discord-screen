@@ -6,6 +6,7 @@ dist/
 .cache/
 site/
 .dev.vars
+.production.vars
 .wrangler/
 work/
 

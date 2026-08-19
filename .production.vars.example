@@ -1,0 +1,7 @@
+# Copie este arquivo para .production.vars antes do primeiro deploy.
+# .production.vars é ignorado pelo Git e nunca deve ser enviado ao repositório.
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+SESSION_SECRET=
+PUBLIC_ORIGIN=https://discord-screen.SEUSUBDOMINIO.workers.dev
+
