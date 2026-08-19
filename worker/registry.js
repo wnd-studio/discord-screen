@@ -13,10 +13,15 @@ export class RoomRegistry extends DurableObject {
         name TEXT NOT NULL,
         owner_name TEXT NOT NULL,
         locked INTEGER NOT NULL DEFAULT 0,
+        listed INTEGER NOT NULL DEFAULT 1,
         is_call INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL
       ); CREATE INDEX IF NOT EXISTS rooms_instance ON rooms(instance);`
     );
+    // A tabela já existe nas contas que receberam a primeira versão.
+    try {
+      this.ctx.storage.sql.exec('ALTER TABLE rooms ADD COLUMN listed INTEGER NOT NULL DEFAULT 1');
+    } catch {}
   }
 
   async fetch(request) {
@@ -26,7 +31,7 @@ export class RoomRegistry extends DurableObject {
     if (url.pathname === '/list') {
       const rows = this.ctx.storage.sql.exec(
         `SELECT id, name, owner_name, locked, created_at
-         FROM rooms WHERE instance = ? AND is_call = 0 ORDER BY created_at`,
+         FROM rooms WHERE instance = ? AND is_call = 0 AND listed = 1 ORDER BY created_at`,
         payload.instance
       ).toArray();
       const rooms = await Promise.all(rows.map(async (row) => {
@@ -52,18 +57,27 @@ export class RoomRegistry extends DurableObject {
         return json({ error: 'Limite de salas abertas atingido. Feche uma antes de criar outra.' }, 409);
       }
       this.ctx.storage.sql.exec(
-        `INSERT INTO rooms (id, instance, name, owner_name, locked, is_call, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO rooms (id, instance, name, owner_name, locked, listed, is_call, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET instance=excluded.instance, name=excluded.name,
-           owner_name=excluded.owner_name, locked=excluded.locked`,
+           owner_name=excluded.owner_name, locked=excluded.locked, listed=excluded.listed`,
         payload.id, payload.instance, payload.name, payload.ownerName,
-        payload.locked ? 1 : 0, payload.isCall ? 1 : 0, payload.createdAt
+        payload.locked ? 1 : 0, payload.listed === false ? 0 : 1,
+        payload.isCall ? 1 : 0, payload.createdAt
       );
       return json({ ok: true });
     }
 
     if (url.pathname === '/locked') {
       this.ctx.storage.sql.exec('UPDATE rooms SET locked = ? WHERE id = ?', payload.locked ? 1 : 0, payload.id);
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/settings') {
+      this.ctx.storage.sql.exec(
+        'UPDATE rooms SET locked = ?, listed = ? WHERE id = ?',
+        payload.locked ? 1 : 0, payload.listed === false ? 0 : 1, payload.id
+      );
       return json({ ok: true });
     }
 
@@ -75,4 +89,3 @@ export class RoomRegistry extends DurableObject {
     return new Response('Not found', { status: 404 });
   }
 }
-
