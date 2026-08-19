@@ -14,6 +14,16 @@ e Durable Objects.
   Client Secret nunca chega ao navegador.
 - **Tokens HMAC:** identidades e acessos de sala assinados com `SESSION_SECRET`.
 
+Recursos práticos já incluídos:
+
+- salas públicas ou privadas por link;
+- convite copiável direto da sala;
+- senha opcional e bloqueio contra tentativas repetidas;
+- dono da sala pode remover participantes;
+- links de acesso expiram em 8 horas;
+- até 50 espectadores e 4 transmissores por sala;
+- o transmissor pausa a codificação quando ninguém está assistindo.
+
 Veja os detalhes do protocolo em [docs/como-funciona.md](docs/como-funciona.md).
 
 ## Pré-requisitos
@@ -120,7 +130,7 @@ publicado.
 | `pnpm build` | monta o frontend e reúne os assets públicos |
 | `pnpm dev` | inicia Worker e Durable Objects localmente |
 | `pnpm check` | valida o bundle com dry-run do Wrangler |
-| `pnpm smoke` | testa HTTP, salas, senha, WebSocket e relay contra `pnpm dev` |
+| `pnpm smoke` | testa HTTP, sala privada, senha, moderação, WebSocket e relay contra `pnpm dev` |
 | `pnpm deploy` | build e publicação na Cloudflare |
 | `pnpm cf:typegen` | gera tipos dos bindings Cloudflare |
 
@@ -137,4 +147,7 @@ publicado.
 - A captura e reprodução dependem de WebCodecs; navegadores sem suporte completo
   podem não transmitir ou assistir corretamente.
 - Até quatro transmissores simultâneos por sala, preservando o limite original.
-
+- O limite de segurança atual é de 50 espectadores conectados por sala. A cota
+  gratuita pode acabar antes disso se muitas pessoas assistirem por muitas horas.
+- A remoção de um participante vale enquanto aquela sala existir. Como salas
+  vazias são apagadas automaticamente, não há uma lista permanente de banidos.
