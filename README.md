@@ -1,39 +1,164 @@
-# Sala de Tela — Cloudflare
+<div align="center">
+  <img src="https://cdn.discordapp.com/app-icons/1539449081527803925/2a48530cf46b16af0e11df6da6979af7.png?size=256" width="120" alt="Ícone do Screen Share">
 
-Aplicação de compartilhamento de tela integrada ao Discord. O frontend continua
-sendo Vite/WebCodecs; HTTP, OAuth, salas e WebSockets rodam em Cloudflare Workers
-e Durable Objects.
+  <h1>Screen Share</h1>
+
+  <p><strong>Compartilhamento de tela simples e em tempo real para comunidades no Discord.</strong></p>
+
+  <p>
+    Uma Discord Activity desenvolvida para estudos, aulas, reuniões e trabalhos em grupo,<br>
+    com backend serverless hospedado na Cloudflare.
+  </p>
+
+  <p>
+    <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
+    <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
+    <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
+    <img src="https://img.shields.io/badge/versao-0.3.0-22C55E?style=flat-square" alt="Versão 0.3.0">
+  </p>
+
+  <p>
+    <a href="https://discord.com/oauth2/authorize?client_id=1539449081527803925">
+      <img src="https://img.shields.io/badge/Instalar_no_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Instalar no Discord">
+    </a>
+    <a href="https://discord-screen.wendellsilvaa012.workers.dev">
+      <img src="https://img.shields.io/badge/Abrir_versao_web-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Abrir versão web">
+    </a>
+  </p>
+
+  <p>
+    <a href="https://discord-screen.wendellsilvaa012.workers.dev/termos">Termos de uso</a>
+    ·
+    <a href="https://discord-screen.wendellsilvaa012.workers.dev/privacidade">Privacidade</a>
+    ·
+    <a href="docs/como-funciona.md">Documentação técnica</a>
+  </p>
+</div>
+
+---
+
+## Sobre o projeto
+
+O **Screen Share** é uma aplicação comunitária de compartilhamento de tela integrada ao Discord. Depois que a atividade é instalada, os participantes entram em um canal de voz, abrem o Screen Share pelo menu de Aplicativos/Atividades e são colocados automaticamente na mesma sala.
+
+Quem deseja transmitir clica em **Compartilhar tela** e escolhe uma tela, janela ou aba do navegador. O vídeo é comprimido no próprio computador, enviado em tempo real e reproduzido para as outras pessoas que estiverem com a atividade aberta.
+
+O projeto também possui uma versão web. Nela é possível criar salas públicas ou privadas, proteger uma sala com senha e compartilhar um convite direto.
+
+> O Screen Share não grava nem armazena o conteúdo das transmissões. Os pacotes de áudio e vídeo são apenas retransmitidos em tempo real.
+
+## Por que o projeto foi adaptado para a Cloudflare?
+
+A primeira versão utilizava uma arquitetura tradicional com **Node.js, Express, servidor HTTP e sessões mantidas em memória**. Ela funcionava localmente, mas dependia de um processo permanentemente ligado e apresentou problemas em serviços gratuitos de hospedagem — inclusive situações em que o deploy aparecia como ativo, mas as rotas HTTP não chegavam ao servidor.
+
+Em vez de continuar criando configurações específicas para cada plataforma, o projeto foi refatorado para uma arquitetura compatível com a Cloudflare:
+
+- o **Cloudflare Worker** recebe as requisições HTTP, processa o OAuth2 e entrega o frontend;
+- os **Durable Objects** mantêm o estado das salas e suas conexões em tempo real;
+- os **WebSockets** transportam os pacotes entre transmissores e espectadores;
+- os **Static Assets** da Cloudflare entregam a interface e as páginas públicas;
+- a aplicação é executada sob demanda, sem depender de um servidor Node ligado continuamente.
+
+Com isso, o serviço pode permanecer publicado 24 horas por dia. As transmissões ativas continuam sujeitas às cotas do plano Cloudflare utilizado.
+
+## Como usar no Discord
+
+1. Um administrador instala a atividade usando o botão **Instalar no Discord** no início desta página.
+2. Os participantes entram no mesmo canal de voz.
+3. Uma pessoa abre **Aplicativos/Atividades → Screen Share**.
+4. Os demais participantes abrem ou entram na atividade iniciada.
+5. Quem vai transmitir clica em **Compartilhar tela**.
+6. Uma aba externa segura é aberta para escolher a tela, janela ou aba desejada.
+7. Os espectadores mantêm a atividade aberta para acompanhar a transmissão.
+
+A aba externa é necessária porque uma Discord Activity roda dentro de um `iframe` protegido. Esse ambiente possui restrições de segurança para a captura direta da tela do computador.
+
+Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opção de compartilhar o som. Esse método também evita capturar novamente o áudio da chamada do Discord.
+
+## Funcionalidades
+
+| Recurso | Situação atual |
+|---|---|
+| Login com a conta do Discord | ✅ OAuth2 integrado |
+| Sala automática por chamada do Discord | ✅ Disponível |
+| Salas públicas na versão web | ✅ Disponível |
+| Salas privadas por link | ✅ Disponível |
+| Senha opcional para salas web | ✅ Disponível |
+| Convites com prazo de validade | ✅ Expiram em 8 horas |
+| Remoção de participantes pelo dono | ✅ Disponível nas salas web |
+| Vídeo em tempo real | ✅ WebCodecs + WebSocket |
+| Áudio de abas do navegador | ✅ Opus |
+| Múltiplos transmissores | ✅ Até 4 por sala |
+| Espectadores | ✅ Limite de segurança de 50 por sala |
+| Gravação da transmissão | ❌ Não realizada |
+| Transmissão iniciada pelo celular | ❌ Ainda não suportada |
+
+O transmissor também interrompe a codificação quando ninguém está assistindo, reduzindo consumo de processamento e da cota da Cloudflare.
 
 ## Arquitetura
 
-- **Worker + Static Assets:** frontend, páginas de captura, termos e privacidade.
+```mermaid
+flowchart LR
+    U[Discord Activity ou navegador]
+    W[Cloudflare Worker]
+    D[Discord OAuth2]
+    G[RoomRegistry Durable Object]
+    R[Room Durable Object]
+    A[Static Assets]
+
+    U <-->|HTTP e autenticação| W
+    U <-->|WebSocket e mídia| R
+    W <-->|OAuth2| D
+    W --> G
+    W --> R
+    W --> A
+```
+
+### Componentes principais
+
+- **Worker + Static Assets:** frontend, APIs, autenticação, página de captura, termos e privacidade.
 - **`RoomRegistry` Durable Object:** índice persistente das salas por instância.
-- **`Room` Durable Object:** uma unidade por sala, responsável por senha, estado,
-  participantes, WebSockets e relay binário.
-- **Discord OAuth2:** troca de código e consulta de perfil sempre no Worker; o
-  Client Secret nunca chega ao navegador.
-- **Tokens HMAC:** identidades e acessos de sala assinados com `SESSION_SECRET`.
+- **`Room` Durable Object:** uma unidade isolada por sala, responsável por participantes, senha, estado, WebSockets e relay binário.
+- **Discord OAuth2:** troca o código de autorização e consulta o perfil no backend. O Client Secret nunca chega ao navegador.
+- **WebCodecs:** codifica vídeo em H.264, VP8 ou VP9, de acordo com o suporte do navegador, e áudio em Opus.
+- **Tokens HMAC:** assinam identidades, acessos e convites utilizando `SESSION_SECRET`.
 
-Recursos práticos já incluídos:
+Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-funciona.md](docs/como-funciona.md).
 
-- salas públicas ou privadas por link;
-- convite copiável direto da sala;
-- senha opcional e bloqueio contra tentativas repetidas;
-- dono da sala pode remover participantes;
-- links de acesso expiram em 8 horas;
-- até 50 espectadores e 4 transmissores por sala;
-- o transmissor pausa a codificação quando ninguém está assistindo.
+## Segurança e privacidade
 
-Veja os detalhes do protocolo em [docs/como-funciona.md](docs/como-funciona.md).
+- secrets são configurados como variáveis protegidas na Cloudflare;
+- `DISCORD_CLIENT_SECRET`, `SESSION_SECRET` e tokens privados não são incluídos no frontend;
+- identidades e acessos de sala são assinados pelo backend;
+- convites privados possuem prazo de validade;
+- senhas de sala não são armazenadas em texto puro;
+- áudio e vídeo não são gravados em banco de dados ou filesystem;
+- o frontend só recebe as informações necessárias para a sessão atual.
 
-## Pré-requisitos
+## Limitações atuais
+
+- A transmissão deve ser iniciada por um computador. A captura de tela no celular ainda depende das limitações dos navegadores e do sistema operacional.
+- O áudio deve vir de uma aba do navegador. A captura de áudio do sistema inteiro é bloqueada para evitar eco da chamada do Discord.
+- A transmissão utiliza relay WebSocket, e não uma infraestrutura WebRTC/SFU. Cada espectador aumenta o tráfego de saída da sala.
+- O plano gratuito da Cloudflare possui cotas diárias. O aplicativo pode ficar publicado continuamente, mas transmissões intensas ou várias salas ativas por muitas horas podem consumir a cota.
+- Captura e reprodução dependem do suporte a WebCodecs. Navegadores incompatíveis podem não conseguir transmitir ou assistir.
+- Uma interrupção na conexão do transmissor pode exigir que o compartilhamento seja iniciado novamente.
+- O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
+- A remoção de uma pessoa vale enquanto a sala existir. Salas vazias são eliminadas automaticamente e não mantêm uma lista permanente de banidos.
+
+---
+
+<details>
+<summary><strong>Executar o projeto localmente</strong></summary>
+
+### Pré-requisitos
 
 - Node.js 20.19+ ou 22.12+;
 - pnpm 11;
 - conta Cloudflare com Workers habilitado;
-- aplicação no Discord Developer Portal.
+- aplicação criada no Discord Developer Portal.
 
-## Desenvolvimento local
+### Instalação
 
 ```bash
 pnpm install
@@ -42,39 +167,46 @@ pnpm build
 pnpm dev
 ```
 
-No Windows, copie `.dev.vars.example` para `.dev.vars` pelo Explorer ou use:
+No Windows, copie `.dev.vars.example` para `.dev.vars` pelo Explorer ou execute:
 
 ```powershell
 Copy-Item .dev.vars.example .dev.vars
 ```
 
-Preencha `.dev.vars`. O arquivo real é ignorado pelo Git.
+Preencha `.dev.vars` com as credenciais de desenvolvimento. O arquivo real é ignorado pelo Git.
 
-## Variáveis e secrets
+</details>
 
-Secrets obrigatórios em produção:
+<details>
+<summary><strong>Variáveis e secrets</strong></summary>
 
-- `DISCORD_CLIENT_ID` — ID público da aplicação Discord;
-- `DISCORD_CLIENT_SECRET` — secret OAuth2 da aplicação;
-- `SESSION_SECRET` — valor aleatório forte usado para assinar tokens.
+### Obrigatórios
 
-Secret opcional:
+| Variável | Finalidade |
+|---|---|
+| `DISCORD_CLIENT_ID` | ID público da aplicação no Discord |
+| `DISCORD_CLIENT_SECRET` | Credencial privada do OAuth2 |
+| `SESSION_SECRET` | Valor aleatório forte para assinatura dos tokens |
+| `PUBLIC_ORIGIN` | Endereço público da aplicação, sem barra no final |
 
-- `DISCORD_BOT_TOKEN` — habilita a conferência de presença no canal de voz.
+### Opcional
 
-Variável recomendada:
+| Variável | Finalidade |
+|---|---|
+| `DISCORD_BOT_TOKEN` | Permite conferir a presença do participante no canal de voz |
 
-- `PUBLIC_ORIGIN` — origem pública sem barra final, por exemplo
-  `https://tela.seudominio.com`. É usada no callback OAuth e no link da aba de
-  captura. Configure-a como secret para evitar manter domínio específico no Git.
+Nunca coloque valores reais desses secrets no código ou no repositório.
 
-Gere o segredo de sessão, por exemplo, com:
+Para gerar um segredo de sessão:
 
 ```bash
 openssl rand -base64 48
 ```
 
-## Publicação exata na Cloudflare
+</details>
+
+<details>
+<summary><strong>Publicar na Cloudflare</strong></summary>
 
 1. Instale as dependências e autentique o Wrangler:
 
@@ -92,62 +224,56 @@ openssl rand -base64 48
    pnpm exec wrangler secret put PUBLIC_ORIGIN
    ```
 
-3. Se usar verificação de call, cadastre também:
+3. Se utilizar a verificação de presença na chamada, cadastre também:
 
    ```bash
    pnpm exec wrangler secret put DISCORD_BOT_TOKEN
    ```
 
-4. Publique Worker, assets e Durable Objects juntos:
+4. Publique o Worker, os assets e os Durable Objects:
 
    ```bash
    pnpm deploy
    ```
 
-5. Copie a URL exibida pelo Wrangler. Se quiser domínio próprio, abra
-   **Cloudflare Dashboard → Workers & Pages → discord-screen → Settings →
-   Domains & Routes → Add → Custom Domain**. Depois atualize `PUBLIC_ORIGIN` e
-   rode `pnpm deploy` novamente.
+5. Confirme o funcionamento em `https://SEU_HOST/api/health`.
 
-6. Confirme `https://SEU_HOST/api/health`. A resposta deve conter
-   `"architecture":"cloudflare-workers-durable-objects"`.
+Para utilizar domínio próprio, abra **Cloudflare Dashboard → Workers & Pages → discord-screen → Settings → Domains & Routes → Add → Custom Domain**. Depois atualize `PUBLIC_ORIGIN` e publique novamente.
 
-## Configuração no Discord Developer Portal
+</details>
+
+<details>
+<summary><strong>Configurar o Discord Developer Portal</strong></summary>
 
 Para a URL pública `https://tela.seudominio.com`, configure:
 
 - **OAuth2 Redirect URI:** `https://tela.seudominio.com/auth/callback`
 - **Activities → URL Mappings → `/`:** `https://tela.seudominio.com`
+- **Installation Contexts:** `User Install` e `Guild Install`
+- **Default Install Scope:** `applications.commands`
 
-Se usar o subdomínio `workers.dev`, use exatamente esse host nos dois lugares.
-Não inclua barra final no redirect e mantenha `PUBLIC_ORIGIN` idêntico ao host
-publicado.
+Se utilizar um endereço `workers.dev`, coloque exatamente esse mesmo host nos campos. Não adicione barra final ao redirect e mantenha `PUBLIC_ORIGIN` idêntico ao endereço publicado.
 
-## Comandos
+</details>
+
+## Comandos do projeto
 
 | Comando | Função |
 |---|---|
-| `pnpm build` | monta o frontend e reúne os assets públicos |
-| `pnpm dev` | inicia Worker e Durable Objects localmente |
-| `pnpm check` | valida o bundle com dry-run do Wrangler |
-| `pnpm smoke` | testa HTTP, sala privada, senha, moderação, WebSocket e relay contra `pnpm dev` |
-| `pnpm deploy` | build e publicação na Cloudflare |
-| `pnpm cf:typegen` | gera tipos dos bindings Cloudflare |
+| `pnpm build` | Monta o frontend e reúne os assets públicos |
+| `pnpm dev` | Inicia Worker e Durable Objects localmente |
+| `pnpm check` | Valida o bundle com um dry-run do Wrangler |
+| `pnpm smoke` | Testa HTTP, salas, senha, moderação, WebSocket e relay |
+| `pnpm deploy` | Executa o build e publica na Cloudflare |
+| `pnpm cf:typegen` | Gera tipos dos bindings Cloudflare |
 
-## Limitações
+## Tecnologias
 
-- Compartilhar tela no celular continua indisponível por restrição do navegador.
-- A transmissão usa relay WebSocket, não WebRTC/SFU; cada espectador multiplica
-  a saída e o número prático depende dos limites de CPU/memória do Durable Object.
-- O plano gratuito tem cotas diárias. A Cloudflare contabiliza mensagens
-  WebSocket recebidas na proporção 20:1; só o vídeo contínuo a 60 fps usa cerca
-  de 10,8 mil requisições faturáveis por hora, antes do áudio e das chamadas HTTP.
-  Portanto, o serviço pode ficar publicado 24/7 sem custo, mas streaming intenso
-  ou mais de uma sala continuamente ativa pode exigir o plano pago.
-- A captura e reprodução dependem de WebCodecs; navegadores sem suporte completo
-  podem não transmitir ou assistir corretamente.
-- Até quatro transmissores simultâneos por sala, preservando o limite original.
-- O limite de segurança atual é de 50 espectadores conectados por sala. A cota
-  gratuita pode acabar antes disso se muitas pessoas assistirem por muitas horas.
-- A remoção de um participante vale enquanto aquela sala existir. Como salas
-  vazias são apagadas automaticamente, não há uma lista permanente de banidos.
+`JavaScript` · `Vite` · `WebCodecs` · `WebSocket` · `Discord Embedded App SDK` · `Discord OAuth2` · `Cloudflare Workers` · `Cloudflare Durable Objects`
+
+---
+
+<div align="center">
+  Desenvolvido como uma alternativa leve para transmissões de estudo e colaboração em comunidade.
+</div>
+
