@@ -15,6 +15,9 @@
     { "name": "ROOM_INDEX", "class_name": "RoomRegistry" }
   ] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room", "RoomRegistry"] }],
+  "secrets": {
+    "required": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "SESSION_SECRET", "PUBLIC_ORIGIN"]
+  },
   "vars": { "ENVIRONMENT": "production" },
   "observability": { "enabled": true }
 }
