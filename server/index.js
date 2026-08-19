@@ -512,6 +512,14 @@ app.get('/auth/callback', async (req, res) => {
 });
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, rooms: R.stats() }));
+app.get('/debug-render', (_req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Este é o servidor correto',
+    port: process.env.PORT || null,
+    node: process.version
+  });
+});
 
 /**
  * O que o cliente precisa saber e só o servidor sabe, em tempo de execução.
