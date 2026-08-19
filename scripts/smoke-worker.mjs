@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
-const base = 'http://127.0.0.1:8787';
+const base = (process.env.SMOKE_BASE || 'http://127.0.0.1:8787').replace(/\/+$/, '');
+const socketBase = base.replace(/^http/, 'ws');
 const post = async (path, payload) => {
   const response = await fetch(`${base}${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
@@ -20,6 +21,9 @@ assert.ok(guest.data.identity);
 const created = await post('/api/rooms/create', { identity: guest.data.identity, name: 'Sala teste', password: 'segredo' });
 assert.equal(created.response.status, 200);
 assert.ok(created.data.viewerToken);
+const roomToken = JSON.parse(Buffer.from(created.data.viewerToken.split('.')[0], 'base64url').toString('utf8'));
+assert.ok(roomToken.exp > Math.floor(Date.now() / 1000));
+assert.ok(roomToken.exp <= Math.floor(Date.now() / 1000) + (8 * 60 * 60) + 5);
 
 const listed = await post('/api/rooms/list', { identity: guest.data.identity });
 assert.equal(listed.response.status, 200);
@@ -30,7 +34,40 @@ assert.equal(denied.response.status, 403);
 const joined = await post('/api/rooms/join', { identity: guest.data.identity, roomId: created.data.roomId, password: 'segredo' });
 assert.equal(joined.response.status, 200);
 
-const openSocket = (token) => new WebSocket(`ws://127.0.0.1:8787/ws?t=${encodeURIComponent(token)}`);
+const privateRoom = await post('/api/rooms/create', {
+  identity: guest.data.identity,
+  name: 'Sala privada',
+  private: true,
+});
+assert.equal(privateRoom.response.status, 200);
+assert.equal(privateRoom.data.listed, false);
+const visitor = await post('/api/session-guest', { name: 'Visitante' });
+const unsignedPrivateJoin = await post('/api/rooms/join', {
+  identity: visitor.data.identity,
+  roomId: privateRoom.data.roomId,
+});
+assert.equal(unsignedPrivateJoin.response.status, 403);
+assert.equal(unsignedPrivateJoin.data.reason, 'convite');
+const hiddenList = await post('/api/rooms/list', { identity: guest.data.identity });
+assert.equal(hiddenList.data.rooms.some((room) => room.id === privateRoom.data.roomId), false);
+const inviteToken = new URL(privateRoom.data.inviteUrl).searchParams.get('convite');
+const privateJoin = await post('/api/rooms/join', {
+  identity: visitor.data.identity,
+  roomId: privateRoom.data.roomId,
+  invite: inviteToken,
+});
+assert.equal(privateJoin.response.status, 200);
+const published = await post('/api/rooms/settings', {
+  identity: guest.data.identity,
+  roomId: privateRoom.data.roomId,
+  listed: true,
+});
+assert.equal(published.response.status, 200);
+assert.equal(published.data.listed, true);
+const visibleList = await post('/api/rooms/list', { identity: guest.data.identity });
+assert.equal(visibleList.data.rooms.some((room) => room.id === privateRoom.data.roomId), true);
+
+const openSocket = (token) => new WebSocket(`${socketBase}/ws?t=${encodeURIComponent(token)}`);
 const waitJson = (ws, type) => new Promise((resolve, reject) => {
   const timeout = setTimeout(() => reject(new Error('WebSocket timeout')), 5000);
   ws.addEventListener('message', (event) => {
@@ -62,8 +99,27 @@ const receivedFrame = new Promise((resolve, reject) => {
 });
 broadcaster.send(Uint8Array.from([slot, 1, 42]));
 await receivedFrame;
-viewer.close(); broadcaster.close();
-console.log('Smoke HTTP + salas + senha + WebSocket + relay binário: OK');
 
+const visitorJoin = await post('/api/rooms/join', {
+  identity: visitor.data.identity,
+  roomId: created.data.roomId,
+  password: 'segredo',
+});
+assert.equal(visitorJoin.response.status, 200);
+const visitorSocket = openSocket(visitorJoin.data.viewerToken);
+await waitJson(visitorSocket, 'state');
+const kicked = waitJson(visitorSocket, 'kicked');
+viewer.send(JSON.stringify({ type: 'kick', userId: visitor.data.user.id }));
+await kicked;
+const blocked = await post('/api/rooms/join', {
+  identity: visitor.data.identity,
+  roomId: created.data.roomId,
+  password: 'segredo',
+});
+assert.equal(blocked.response.status, 403);
+assert.equal(blocked.data.reason, 'removido');
 
-
+viewer.close();
+broadcaster.close();
+visitorSocket.close();
+console.log(`Smoke completo em ${base}: OK`);

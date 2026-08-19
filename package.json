@@ -1,6 +1,6 @@
 {
   "name": "discord-screen",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -18,4 +18,3 @@
     "wrangler": "^4.33.1"
   }
 }
-

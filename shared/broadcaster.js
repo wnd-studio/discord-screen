@@ -330,7 +330,7 @@ export function createBroadcaster({
         break;
       }
 
-      if (audioEncoder?.state === 'configured') {
+      if (viewers > 0 && audioEncoder?.state === 'configured') {
         try {
           audioEncoder.encode(dados);
         } catch (err) {
@@ -342,7 +342,7 @@ export function createBroadcaster({
   }
 
   function onAudioEncoded(chunk) {
-    if (ws?.readyState !== WebSocket.OPEN) return;
+    if (viewers === 0 || ws?.readyState !== WebSocket.OPEN) return;
 
     const data = new Uint8Array(chunk.byteLength);
     chunk.copyTo(data);
@@ -450,6 +450,12 @@ export function createBroadcaster({
       frame.close();
       return false;
     }
+    // Sem ninguém assistindo, manter a captura aberta custa zero mensagens de
+    // mídia. O primeiro `watch` pede um keyframe e retoma na hora.
+    if (viewers === 0) {
+      frame.close();
+      return true;
+    }
     // Backpressure: fila no encoder vira latência que nunca mais sai.
     if (encoder.encodeQueueSize > 2) {
       frame.close();
@@ -524,7 +530,7 @@ export function createBroadcaster({
   }
 
   function onEncoded(chunk, metadata) {
-    if (ws?.readyState !== WebSocket.OPEN) return;
+    if (viewers === 0 || ws?.readyState !== WebSocket.OPEN) return;
 
     // O decoderConfig chega no primeiro chunk e sempre que a config muda.
     if (metadata?.decoderConfig) {
@@ -596,9 +602,15 @@ export function createBroadcaster({
         const msg = JSON.parse(e.data);
 
         if (msg.type === 'slot') mySlot = msg.slot;
-        else if (msg.type === 'state') viewers = msg.viewers;
+        else if (msg.type === 'state') {
+          const mine = (msg.streams ?? []).find((stream) => stream.slot === mySlot);
+          viewers = mine?.watchers?.length ?? 0;
+        }
         // Alguém entrou na sala e precisa de um ponto de partida.
-        else if (msg.type === 'need-keyframe') wantKeyframe = true;
+        else if (msg.type === 'need-keyframe') {
+          viewers = Math.max(1, viewers);
+          wantKeyframe = true;
+        }
         else if (msg.type === 'stop-request') stop('Transmissão encerrada pela atividade.');
         else if (msg.type === 'error') {
           if (running) stop(msg.message);

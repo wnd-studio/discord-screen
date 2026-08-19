@@ -3,6 +3,7 @@ import { json } from './http.js';
 import { hashPassword, passwordMatches } from './passwords.js';
 
 const MAX_BROADCASTERS = 4;
+const MAX_VIEWERS = 50;
 const MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 const MAX_ATTEMPTS = 5;
 const ATTEMPT_WINDOW_MS = 60_000;
@@ -23,6 +24,10 @@ export class Room extends DurableObject {
     this.meta = null;
     this.ctx.blockConcurrencyWhile(async () => {
       this.meta = await this.ctx.storage.get('meta') ?? null;
+      if (this.meta) {
+        this.meta.listed = this.meta.listed !== false;
+        this.meta.banned = Array.isArray(this.meta.banned) ? this.meta.banned : [];
+      }
     });
   }
 
@@ -62,6 +67,7 @@ export class Room extends DurableObject {
           attempts: [],
           lockedUntil: 0,
           droppedChunks: 0,
+          banned: [],
         };
         await this.ctx.storage.put('meta', this.meta);
         // Uma sala criada mas nunca conectada também precisa expirar; sem este
@@ -81,7 +87,20 @@ export class Room extends DurableObject {
       const ids = new Set();
       for (const { a } of this.viewers()) ids.add(a.uid);
       for (const { a } of this.broadcasters()) ids.add(a.uid);
-      return json({ people: ids.size, streams: this.broadcasters().filter(({ a }) => a.streaming).length });
+      return json({
+        people: ids.size,
+        viewers: this.viewers().length,
+        maxViewers: MAX_VIEWERS,
+        streams: this.broadcasters().filter(({ a }) => a.streaming).length,
+      });
+    }
+
+    if (url.pathname === '/access/check' && request.method === 'POST') {
+      const { uid } = await request.json().catch(() => ({}));
+      if (this.meta.banned?.includes(uid)) return json({ ok: false, reason: 'removido' });
+      const others = this.viewers().filter(({ a }) => a.uid !== uid);
+      if (others.length >= MAX_VIEWERS) return json({ ok: false, reason: 'cheia' });
+      return json({ ok: true });
     }
 
     if (url.pathname === '/password/check' && request.method === 'POST') {
@@ -107,16 +126,25 @@ export class Room extends DurableObject {
       });
     }
 
-    if (url.pathname === '/password/set' && request.method === 'POST') {
-      const { uid, password } = await request.json().catch(() => ({}));
-      if (uid !== this.meta.ownerId) return json({ error: 'Só quem criou a sala pode mudar a senha.' }, 403);
+    if ((url.pathname === '/password/set' || url.pathname === '/settings') && request.method === 'POST') {
+      const { uid, password, listed } = await request.json().catch(() => ({}));
+      if (uid !== this.meta.ownerId) return json({ error: 'Só quem criou a sala pode alterar esses ajustes.' }, 403);
       this.meta.password = password ? await hashPassword(password) : null;
+      if (url.pathname === '/settings') this.meta.listed = listed !== false;
       this.meta.attempts = [];
       this.meta.lockedUntil = 0;
       await this.ctx.storage.put('meta', this.meta);
-      await this.registry('/locked', { id: this.meta.id, locked: Boolean(this.meta.password) });
+      await this.registry('/settings', {
+        id: this.meta.id,
+        locked: Boolean(this.meta.password),
+        listed: this.meta.listed !== false,
+      });
       this.broadcastState();
-      return json({ ok: true, locked: Boolean(this.meta.password) });
+      return json({
+        ok: true,
+        locked: Boolean(this.meta.password),
+        listed: this.meta.listed !== false,
+      });
     }
 
     return new Response('Not found', { status: 404 });
@@ -131,6 +159,7 @@ export class Room extends DurableObject {
       ownerName: this.meta.ownerName,
       isCall: Boolean(this.meta.isCall),
       locked: Boolean(this.meta.password),
+      listed: this.meta.listed !== false,
       createdAt: this.meta.createdAt,
     };
   }
@@ -139,6 +168,7 @@ export class Room extends DurableObject {
     if (!this.meta) return new Response('Sala não existe mais.', { status: 404 });
     let auth;
     try { auth = JSON.parse(request.headers.get('x-room-auth')); } catch { return new Response('Unauthorized', { status: 401 }); }
+    if (this.meta.banned?.includes(auth.uid)) return new Response('Removido', { status: 403 });
     const role = auth.role === 'broadcaster' ? 'broadcaster' : 'viewer';
     if (role === 'broadcaster') {
       const current = this.broadcasters();
@@ -150,6 +180,10 @@ export class Room extends DurableObject {
       auth.config = null;
       auth.audioConfig = null;
     } else {
+      const previous = this.viewers().filter(({ a }) => a.uid === auth.uid);
+      const others = this.viewers().filter(({ a }) => a.uid !== auth.uid);
+      if (others.length >= MAX_VIEWERS) return new Response('Sala cheia', { status: 409 });
+      for (const { ws } of previous) ws.close(1000, 'Conexão substituída');
       auth.watching = [];
       auth.primed = [];
     }
@@ -171,7 +205,7 @@ export class Room extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(ws, message) {
+  async webSocketMessage(ws, message) {
     const a = this.attachment(ws);
     if (typeof message !== 'string') {
       if (a.role === 'broadcaster') this.relayChunk(a, message);
@@ -180,7 +214,7 @@ export class Room extends DurableObject {
     let msg;
     try { msg = JSON.parse(message); } catch { return; }
     if (a.role === 'broadcaster') this.broadcasterMessage(ws, a, msg);
-    else this.viewerMessage(ws, a, msg);
+    else await this.viewerMessage(ws, a, msg);
   }
 
   broadcasterMessage(ws, a, msg) {
@@ -203,7 +237,7 @@ export class Room extends DurableObject {
     } else if (msg.type === 'stop') this.stopStream(ws, a);
   }
 
-  viewerMessage(ws, a, msg) {
+  async viewerMessage(ws, a, msg) {
     if (msg.type === 'rename' && typeof msg.name === 'string') {
       const name = msg.name.replace(/\s+/g, ' ').trim().slice(0, 32);
       if (name) { a.name = name; this.save(ws, a); this.broadcastState(); }
@@ -220,6 +254,19 @@ export class Room extends DurableObject {
     } else if (msg.type === 'stop-broadcast') {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.uid === a.uid);
       if (broadcaster) safeSend(broadcaster.ws, JSON.stringify({ type: 'stop-request' }));
+    } else if (msg.type === 'kick' && a.uid === this.meta.ownerId) {
+      const target = String(msg.userId ?? '');
+      if (!target || target === this.meta.ownerId) return;
+      if (!this.meta.banned.includes(target)) {
+        this.meta.banned.push(target);
+        await this.ctx.storage.put('meta', this.meta);
+      }
+      for (const socket of this.ctx.getWebSockets()) {
+        if (this.attachment(socket).uid !== target) continue;
+        safeSend(socket, JSON.stringify({ type: 'kicked' }));
+        socket.close(1008, 'Removido pelo dono da sala');
+      }
+      this.broadcastState();
     }
   }
 
@@ -267,7 +314,14 @@ export class Room extends DurableObject {
     const broadcasters = this.broadcasters();
     return {
       type: 'state',
-      room: { id: this.meta.id, name: this.meta.name, ownerId: this.meta.ownerId, locked: Boolean(this.meta.password) },
+      room: {
+        id: this.meta.id,
+        name: this.meta.name,
+        ownerId: this.meta.ownerId,
+        locked: Boolean(this.meta.password),
+        listed: this.meta.listed !== false,
+        maxViewers: MAX_VIEWERS,
+      },
       broadcasting: broadcasters.length > 0,
       viewers: this.viewers().length,
       participants: [...participants.values()].sort((x, y) => Number(y.broadcasting) - Number(x.broadcasting)),
@@ -298,4 +352,3 @@ export class Room extends DurableObject {
     });
   }
 }
-

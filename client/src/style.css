@@ -532,6 +532,27 @@ body {
   gap: 6px;
 }
 
+.hover-row-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hover-kick {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #f23f43;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hover-kick:hover {
+  background: rgba(242, 63, 67, 0.14);
+}
+
 .hover-row .dot {
   flex: 0 0 auto;
   width: 7px;
