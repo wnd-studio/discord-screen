@@ -130,8 +130,8 @@ publicado.
 - A transmissão usa relay WebSocket, não WebRTC/SFU; cada espectador multiplica
   a saída e o número prático depende dos limites de CPU/memória do Durable Object.
 - O plano gratuito tem cotas diárias. A Cloudflare contabiliza mensagens
-  WebSocket recebidas na proporção 20:1; uma transmissão contínua a 60 fps usa
-  cerca de 10,8 mil requisições faturáveis por hora, antes das chamadas HTTP.
+  WebSocket recebidas na proporção 20:1; só o vídeo contínuo a 60 fps usa cerca
+  de 10,8 mil requisições faturáveis por hora, antes do áudio e das chamadas HTTP.
   Portanto, o serviço pode ficar publicado 24/7 sem custo, mas streaming intenso
   ou mais de uma sala continuamente ativa pode exigir o plano pago.
 - A captura e reprodução dependem de WebCodecs; navegadores sem suporte completo
