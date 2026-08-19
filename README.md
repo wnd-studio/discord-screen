@@ -120,9 +120,10 @@ O transmissor também interrompe a codificação quando ninguém está assistind
 
 ### Painel administrativo
 
-Abra `https://SEU_HOST/admin` e entre com o Discord. O proprietário da aplicação e os membros da
-equipe cadastrada no Developer Portal são reconhecidos automaticamente. IDs extras podem ser
-adicionados em `ADMIN_DISCORD_IDS`.
+Abra `https://SEU_HOST/admin` e entre com o Discord. Configure o seu ID pessoal em
+`ADMIN_DISCORD_IDS`; essa é a forma mais confiável de garantir que somente as contas escolhidas
+entrem no painel. O proprietário ou a equipe também podem ser reconhecidos automaticamente quando
+o Discord inclui esses dados na resposta da aplicação.
 
 O painel mostra salas ativas, participantes, transmissões, servidores onde a Atividade foi usada,
 histórico de 90 dias e ações administrativas. É possível encerrar salas, desconectar ou bloquear
@@ -234,7 +235,7 @@ Preencha `.dev.vars` com as credenciais de desenvolvimento. O arquivo real é ig
 | Variável | Finalidade |
 |---|---|
 | `DISCORD_BOT_TOKEN` | Permite conferir a presença do participante no canal de voz |
-| `ADMIN_DISCORD_IDS` | IDs adicionais autorizados no painel, separados por vírgula; o proprietário da aplicação já é reconhecido automaticamente |
+| `ADMIN_DISCORD_IDS` | IDs pessoais autorizados no painel, separados por vírgula; recomendado mesmo para o proprietário |
 | `DISCORD_PUBLIC_KEY` | Chave pública para validar webhooks; normalmente é descoberta automaticamente pela API do Discord |
 
 Nunca coloque valores reais desses secrets no código ou no repositório.

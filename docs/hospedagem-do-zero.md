@@ -160,8 +160,12 @@ Regras importantes:
 
 `DISCORD_BOT_TOKEN` é opcional e não é necessário para a instalação básica. Também são opcionais:
 
-- `ADMIN_DISCORD_IDS`: IDs extras que podem entrar em `/admin`, separados por vírgula. O proprietário e a equipe da aplicação já são reconhecidos automaticamente;
+- `ADMIN_DISCORD_IDS`: IDs pessoais que podem entrar em `/admin`, separados por vírgula. É recomendado configurar explicitamente o ID do proprietário porque o Discord nem sempre o devolve nos metadados da aplicação;
 - `DISCORD_PUBLIC_KEY`: chave pública dos webhooks. Normalmente o Worker a descobre automaticamente pela API do Discord.
+
+Para descobrir seu ID pessoal, ative o **Modo desenvolvedor** nas configurações avançadas do
+Discord, clique com o botão direito no seu perfil e escolha **Copiar ID do usuário**. Cole esse
+número em `ADMIN_DISCORD_IDS`. Para autorizar mais de uma pessoa, separe os IDs por vírgula.
 
 ## 7. Fazer o primeiro deploy
 
