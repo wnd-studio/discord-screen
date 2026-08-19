@@ -1,10 +1,32 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 
 const base = (process.env.SMOKE_BASE || 'http://127.0.0.1:8787').replace(/\/+$/, '');
 const socketBase = base.replace(/^http/, 'ws');
+const testAdmin = process.env.SMOKE_ADMIN !== 'false';
 const post = async (path, payload) => {
   const response = await fetch(`${base}${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
+  return { response, data };
+};
+
+const adminPayload = Buffer.from(JSON.stringify({
+  scope: 'admin', uid: 'smoke-admin', name: 'Administrador de teste',
+  exp: Math.floor(Date.now() / 1000) + 3600,
+})).toString('base64url');
+const adminToken = `${adminPayload}.${createHmac('sha256', process.env.SMOKE_SESSION_SECRET || 'smoke-admin-secret').update(adminPayload).digest('base64url')}`;
+const adminPost = async (path, payload = {}) => {
+  const response = await fetch(`${base}${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie: `discord_screen_admin=${adminToken}`,
+      origin: base,
+    },
+    body: JSON.stringify(payload),
   });
   const raw = await response.text();
   const data = raw ? JSON.parse(raw) : {};
@@ -69,6 +91,14 @@ const visibleList = await post('/api/rooms/list', { identity: guest.data.identit
 assert.equal(visibleList.data.rooms.some((room) => room.id === privateRoom.data.roomId), true);
 assert.equal(visibleList.data.rooms.some((room) => /^(call|atividade)-/.test(room.id)), false);
 
+if (testAdmin) {
+  const anonymousAdmin = await post('/api/admin/overview', {});
+  assert.equal(anonymousAdmin.response.status, 401);
+  const liveOverview = await adminPost('/api/admin/overview');
+  assert.equal(liveOverview.response.status, 200);
+  assert.equal(liveOverview.data.rooms.some((room) => room.id === created.data.roomId), true);
+}
+
 // Em desenvolvimento conseguimos emitir uma identidade de Activity sem falar
 // com o Discord. Em produção essa rota retorna 404 e o teste é simplesmente
 // ignorado. Quando disponível, comprova que a sala da call não vaza no lobby e
@@ -77,6 +107,9 @@ const devCall = await post('/api/session-dev', {
   instance_id: `smoke-${Date.now()}`,
   name: 'Teste da call',
   call: '123456789012345678',
+  guild_id: '987654321098765432',
+  guild_name: 'Servidor do smoke',
+  channel_name: 'Sala de estudos',
 });
 if (devCall.response.status === 200) {
   const callRoom = await post('/api/rooms/call', { identity: devCall.data.identity });
@@ -174,6 +207,53 @@ assert.equal(deletedPrivate.response.status, 200);
 const afterDelete = await post('/api/rooms/list', { identity: guest.data.identity });
 assert.equal(afterDelete.data.rooms.some((room) => room.id === created.data.roomId), false);
 assert.equal(afterDelete.data.rooms.some((room) => room.id === privateRoom.data.roomId), false);
+
+if (testAdmin) {
+  const adminRoom = await post('/api/rooms/create', {
+    identity: guest.data.identity,
+    name: 'Sala da administração',
+  });
+  assert.equal(adminRoom.response.status, 200);
+  const adminViewer = openSocket(adminRoom.data.viewerToken);
+  await waitJson(adminViewer, 'state');
+  const adminClosed = waitJson(adminViewer, 'room-deleted');
+  const closeResult = await adminPost('/api/admin/action', {
+    action: 'close-room', roomId: adminRoom.data.roomId, reason: 'Teste automático',
+  });
+  assert.equal(closeResult.response.status, 200);
+  await adminClosed;
+
+  const blockedTarget = await post('/api/session-dev', {
+    instance_id: 'web', user_id: 'blocked-test-user', name: 'Usuário bloqueado',
+  });
+  assert.equal(blockedTarget.response.status, 200);
+  const blockResult = await adminPost('/api/admin/action', {
+    action: 'block-user', userId: 'blocked-test-user', reason: 'Teste de bloqueio',
+  });
+  assert.equal(blockResult.response.status, 200);
+  const deniedBlocked = await post('/api/rooms/create', {
+    identity: blockedTarget.data.identity, name: 'Não deve criar',
+  });
+  assert.equal(deniedBlocked.response.status, 403);
+  const unblockResult = await adminPost('/api/admin/action', {
+    action: 'unblock', subjectType: 'user', subjectId: 'blocked-test-user',
+  });
+  assert.equal(unblockResult.response.status, 200);
+
+  const maintenanceOn = await adminPost('/api/admin/action', { action: 'maintenance', enabled: true });
+  assert.equal(maintenanceOn.response.status, 200);
+  const maintenanceDenied = await post('/api/session-guest', { name: 'Durante manutenção' });
+  assert.equal(maintenanceDenied.response.status, 503);
+  const maintenanceOff = await adminPost('/api/admin/action', { action: 'maintenance', enabled: false });
+  assert.equal(maintenanceOff.response.status, 200);
+
+  const finalOverview = await adminPost('/api/admin/overview');
+  assert.equal(finalOverview.response.status, 200);
+  assert.ok(finalOverview.data.audit.length >= 4);
+  assert.ok(finalOverview.data.totals.launches >= 1);
+  assert.equal(finalOverview.data.servers.some((server) => server.guildId === '987654321098765432'), true);
+  adminViewer.close();
+}
 
 viewer.close();
 broadcaster.close();

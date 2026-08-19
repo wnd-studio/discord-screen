@@ -1391,12 +1391,20 @@ async function authDiscord(fonteDoId) {
     response_type: 'code',
     state: '',
     prompt: 'none',
-    // Só precisamos de /users/@me. Menos escopo, menos atrito no consentimento.
-    scope: ['identify'],
+    // `guilds` permite guardar somente o nome/ícone do servidor atual no
+    // painel administrativo. O token continua temporário e não é armazenado.
+    scope: ['identify', 'guilds'],
   });
 
   const { access_token } = await post(`${P}/api/token`, { code, client_id: clientId });
   await sdk.commands.authenticate({ access_token });
+
+  let channelName = null;
+  if (sdk.channelId) {
+    try {
+      channelName = (await sdk.commands.getChannel({ channel_id: sdk.channelId }))?.name ?? null;
+    } catch {}
+  }
 
   // guild/channel vão junto para o servidor poder confirmar, pelo Discord, que
   // a pessoa está mesmo naquela call.
@@ -1405,6 +1413,7 @@ async function authDiscord(fonteDoId) {
     instance_id: sdk.instanceId,
     guild_id: sdk.guildId,
     channel_id: sdk.channelId,
+    channel_name: channelName,
   });
 }
 

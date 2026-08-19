@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Administração · Discord Screen</title>
+    <link rel="stylesheet" href="/src/admin.css" />
+  </head>
+  <body>
+    <main id="login" class="login" hidden>
+      <section class="login-card">
+        <div class="brand-mark">DS</div>
+        <p class="eyebrow">Discord Screen</p>
+        <h1>Painel administrativo</h1>
+        <p id="loginMessage" class="muted">Entre com a conta proprietária do aplicativo no Discord.</p>
+        <a class="button primary login-button" href="/admin/login">Entrar com Discord</a>
+        <a class="quiet-link" href="/">Voltar para o aplicativo</a>
+      </section>
+    </main>
+
+    <div id="dashboard" class="shell" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark small">DS</div>
+          <div>
+            <span class="eyebrow">Discord Screen</span>
+            <h1>Administração</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span id="updatedAt" class="updated"></span>
+          <button id="refresh" class="button secondary">Atualizar</button>
+          <a class="button secondary" href="/admin/logout">Sair</a>
+        </div>
+      </header>
+
+      <section id="maintenanceBanner" class="maintenance" hidden>
+        <div>
+          <strong>Modo de manutenção ativo</strong>
+          <span>Novas entradas estão suspensas e as salas foram encerradas.</span>
+        </div>
+        <button id="disableMaintenance" class="button secondary">Reabrir aplicativo</button>
+      </section>
+
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Visão geral</p>
+          <h2 id="welcome">Acompanhamento do aplicativo</h2>
+          <p class="muted">Uso, transmissões e controles em um único lugar.</p>
+        </div>
+        <button id="enableMaintenance" class="button danger-outline">Ativar manutenção</button>
+      </section>
+
+      <section id="stats" class="stats" aria-label="Resumo"></section>
+
+      <section class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Últimos 14 dias</p>
+            <h2>Aberturas da Atividade</h2>
+          </div>
+          <span id="appCounts" class="panel-note"></span>
+        </div>
+        <div id="chart" class="chart" aria-label="Aberturas por dia"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Agora</p>
+            <h2>Salas ativas</h2>
+          </div>
+          <span class="live-dot">Tempo real</span>
+        </div>
+        <div id="rooms" class="room-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Histórico</p>
+            <h2>Servidores</h2>
+          </div>
+          <span class="panel-note">Somente servidores onde o app foi aberto ou instalado</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Servidor</th><th>Último canal</th><th>Usos</th><th>Último acesso</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="servers"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="split">
+        <section class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Segurança</p><h2>Bloqueios</h2></div>
+          </div>
+          <div id="blocks" class="stack"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Rastreabilidade</p><h2>Ações administrativas</h2></div>
+          </div>
+          <div id="audit" class="stack audit"></div>
+        </section>
+      </div>
+
+      <footer>
+        <span id="adminIdentity"></span>
+        <span>O conteúdo das transmissões não é gravado.</span>
+      </footer>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="/src/admin.js"></script>
+  </body>
+</html>

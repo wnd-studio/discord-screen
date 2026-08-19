@@ -1,0 +1,290 @@
+const $ = (selector) => document.querySelector(selector);
+const login = $('#login');
+const dashboard = $('#dashboard');
+const toast = $('#toast');
+let admin = null;
+let refreshTimer = null;
+
+function showToast(message, isError = false) {
+  toast.textContent = message;
+  toast.classList.toggle('error', isError);
+  toast.hidden = false;
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => { toast.hidden = true; }, 3800);
+}
+
+async function post(path, payload = {}) {
+  const response = await fetch(path, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const problem = new Error(data.error || `Erro ${response.status}`);
+    problem.status = response.status;
+    throw problem;
+  }
+  return data;
+}
+
+const number = (value) => new Intl.NumberFormat('pt-BR').format(Number(value || 0));
+const date = (value) => value ? new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short', timeStyle: 'short',
+}).format(new Date(Number(value))) : '—';
+const duration = (ms) => {
+  const minutes = Math.round(Number(ms || 0) / 60000);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}min`;
+};
+const el = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+function empty(text) { return el('div', 'empty-state', text); }
+
+async function action(payload, confirmation) {
+  if (confirmation && !confirm(confirmation)) return;
+  try {
+    await post('/api/admin/action', payload);
+    showToast('Ação concluída.');
+    await loadOverview();
+  } catch (problem) {
+    showToast(problem.message, true);
+  }
+}
+
+function reason(fallback) {
+  const value = prompt('Motivo (aparece somente no registro administrativo):', fallback);
+  return value === null ? null : (value.trim() || fallback);
+}
+
+function renderStats(totals) {
+  const values = [
+    ['Servidores conhecidos', totals.servers],
+    ['Aberturas em 30 dias', totals.launches30d],
+    ['Usuários em 30 dias', totals.uniqueUsers30d],
+    ['Transmissões em 30 dias', totals.streams30d],
+    ['Tempo transmitido', duration(totals.streamedMs30d)],
+    ['Pessoas agora', totals.activePeople, 'live'],
+  ];
+  $('#stats').replaceChildren(...values.map(([label, value, className]) => {
+    const card = el('article', `stat ${className || ''}`.trim());
+    card.append(el('span', '', label), el('strong', '', typeof value === 'number' ? number(value) : value));
+    return card;
+  }));
+}
+
+function renderChart(daily) {
+  const byDay = new Map(daily.map((item) => [item.day, Number(item.launches)]));
+  const days = [];
+  for (let index = 13; index >= 0; index--) {
+    const value = new Date();
+    value.setUTCHours(0, 0, 0, 0);
+    value.setUTCDate(value.getUTCDate() - index);
+    const key = value.toISOString().slice(0, 10);
+    days.push({ key, launches: byDay.get(key) || 0 });
+  }
+  const maximum = Math.max(1, ...days.map((item) => item.launches));
+  $('#chart').replaceChildren(...days.map((item) => {
+    const wrap = el('div', 'bar-wrap');
+    const value = el('span', 'bar-value', number(item.launches));
+    const bar = el('div', 'bar');
+    bar.style.height = `${Math.max(3, item.launches / maximum * 112)}px`;
+    bar.title = `${item.launches} abertura(s) em ${item.key}`;
+    const label = el('span', 'bar-day', item.key.slice(8, 10));
+    wrap.append(value, bar, label);
+    return wrap;
+  }));
+}
+
+function roomCard(room) {
+  const card = el('article', 'room-card');
+  const title = el('div', 'room-title');
+  title.append(el('h3', '', room.name || room.id), el('span', 'badge', room.isCall ? 'Atividade' : 'Sala web'));
+  card.append(title, el('p', 'room-meta', `${room.guildId || 'Web'} · ${room.channelId || room.instance || 'sem canal'}`));
+  const counts = el('div', 'room-counts');
+  counts.append(el('span', '', `${number(room.people)} pessoa(s)`), el('span', '', `${number(room.streamCount)} transmissão(ões)`), el('span', '', `desde ${date(room.createdAt)}`));
+  card.append(counts);
+
+  const participants = el('div', 'participant-list');
+  if (!room.participants?.length) participants.append(empty('A sala ainda não recebeu conexões.'));
+  for (const person of room.participants || []) {
+    const row = el('div', 'participant');
+    const text = el('span', 'participant-name', person.name || person.id);
+    text.title = person.id;
+    row.append(text, el('span', 'role', person.role === 'broadcaster' ? 'transmissor' : 'espectador'));
+    const disconnect = el('button', 'button secondary small', 'Desconectar');
+    disconnect.onclick = () => {
+      const why = reason('Desconectado pela administração');
+      if (why) action({ action: 'kick-user', roomId: room.id, userId: person.id, reason: why }, `Desconectar ${person.name}?`);
+    };
+    const block = el('button', 'button danger-outline small', 'Bloquear');
+    block.onclick = () => {
+      const why = reason('Uso indevido do aplicativo');
+      if (why) action({ action: 'block-user', userId: person.id, reason: why }, `Bloquear ${person.name} em todo o aplicativo?`);
+    };
+    row.append(disconnect, block);
+    participants.append(row);
+  }
+  card.append(participants);
+  const actions = el('div', 'room-actions');
+  const close = el('button', 'button danger-outline small', 'Encerrar sala');
+  close.onclick = () => {
+    const why = reason('Encerrada pela administração');
+    if (why) action({ action: 'close-room', roomId: room.id, reason: why }, `Encerrar a sala “${room.name}”?`);
+  };
+  actions.append(close);
+  card.append(actions);
+  return card;
+}
+
+function renderRooms(rooms) {
+  $('#rooms').replaceChildren(...(rooms.length ? rooms.map(roomCard) : [empty('Nenhuma sala ativa neste momento.') ]));
+}
+
+function renderServers(servers) {
+  const rows = servers.map((server) => {
+    const row = document.createElement('tr');
+    const identity = document.createElement('td');
+    const cell = el('div', 'server-cell');
+    if (server.icon) {
+      const image = document.createElement('img');
+      image.className = 'server-icon';
+      image.alt = '';
+      image.src = `https://cdn.discordapp.com/icons/${server.guildId}/${server.icon}.webp?size=64`;
+      cell.append(image);
+    } else cell.append(el('span', 'server-icon', (server.name || '?').slice(0, 1).toUpperCase()));
+    const names = el('span', 'server-name');
+    names.append(el('strong', '', server.name || 'Servidor sem nome'), el('small', '', server.guildId));
+    cell.append(names);
+    identity.append(cell);
+    row.append(identity);
+    row.append(el('td', '', server.lastChannelName || server.lastChannelId || '—'));
+    row.append(el('td', '', number(server.launches)));
+    row.append(el('td', '', date(server.lastSeen)));
+    const state = document.createElement('td');
+    state.append(el('span', `badge ${server.installed ? 'installed' : ''}`, server.installed ? 'Instalado' : 'Uso registrado'));
+    row.append(state);
+    const controls = document.createElement('td');
+    const button = el('button', 'button danger-outline small', 'Bloquear');
+    button.onclick = () => {
+      const why = reason('Servidor bloqueado pela administração');
+      if (why) action({ action: 'block-guild', guildId: server.guildId, reason: why }, `Bloquear o servidor “${server.name || server.guildId}”?`);
+    };
+    controls.append(button);
+    row.append(controls);
+    return row;
+  });
+  if (!rows.length) {
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 6;
+    cell.append(empty('O histórico começa a ser preenchido quando a Atividade for aberta novamente.'));
+    row.append(cell);
+    rows.push(row);
+  }
+  $('#servers').replaceChildren(...rows);
+}
+
+function renderBlocks(blocks) {
+  const rows = blocks.map((block) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', `${block.subjectType === 'guild' ? 'Servidor' : 'Usuário'} · ${block.subjectId}`));
+    main.append(el('span', '', `${block.reason || 'Sem motivo'} · ${block.expiresAt ? `até ${date(block.expiresAt)}` : 'permanente'}`));
+    const remove = el('button', 'button secondary small', 'Remover');
+    remove.onclick = () => action({ action: 'unblock', subjectType: block.subjectType, subjectId: block.subjectId }, 'Remover este bloqueio?');
+    row.append(main, remove);
+    return row;
+  });
+  $('#blocks').replaceChildren(...(rows.length ? rows : [empty('Nenhum usuário ou servidor bloqueado.') ]));
+}
+
+const actionLabels = {
+  'close-room': 'Encerrou uma sala',
+  'kick-user': 'Desconectou um usuário',
+  'block-user': 'Bloqueou um usuário',
+  'block-guild': 'Bloqueou um servidor',
+  unblock: 'Removeu um bloqueio',
+  maintenance: 'Alterou o modo de manutenção',
+};
+
+function renderAudit(audit) {
+  const rows = audit.map((entry) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', `${entry.adminName} · ${actionLabels[entry.action] || entry.action}`));
+    main.append(el('span', '', `${entry.targetId || 'aplicativo'} · ${date(entry.createdAt)}`));
+    row.append(main);
+    return row;
+  });
+  $('#audit').replaceChildren(...(rows.length ? rows : [empty('As próximas ações administrativas aparecerão aqui.') ]));
+}
+
+async function loadOverview(silent = false) {
+  const refresh = $('#refresh');
+  if (!silent) refresh.disabled = true;
+  try {
+    const data = await post('/api/admin/overview');
+    renderStats(data.totals || {});
+    renderChart(data.daily || []);
+    renderRooms(data.rooms || []);
+    renderServers(data.servers || []);
+    renderBlocks(data.blocks || []);
+    renderAudit(data.audit || []);
+    $('#updatedAt').textContent = `Atualizado ${date(data.generatedAt)}`;
+    $('#maintenanceBanner').hidden = !data.maintenance;
+    $('#enableMaintenance').hidden = Boolean(data.maintenance);
+    const app = data.application;
+    $('#appCounts').textContent = app
+      ? `${app.approximateGuildCount ?? '—'} instalação(ões) aproximada(s) · webhook ${app.webhookStatus === 2 ? 'ativo' : 'pendente'}`
+      : 'Informações do Discord temporariamente indisponíveis';
+  } catch (problem) {
+    if (problem.status === 401) return showLogin();
+    if (!silent) showToast(problem.message, true);
+  } finally {
+    refresh.disabled = false;
+  }
+}
+
+function showLogin() {
+  dashboard.hidden = true;
+  login.hidden = false;
+  clearInterval(refreshTimer);
+  const error = new URLSearchParams(location.search).get('erro');
+  if (error === 'sem_acesso') $('#loginMessage').textContent = 'Esta conta não é proprietária nem administradora do aplicativo no Discord.';
+  else if (error) $('#loginMessage').textContent = 'Não foi possível concluir a entrada. Tente novamente.';
+}
+
+async function start() {
+  try {
+    const result = await post('/api/admin/me');
+    admin = result.user;
+    login.hidden = true;
+    dashboard.hidden = false;
+    $('#welcome').textContent = `Olá, ${admin.name}`;
+    $('#adminIdentity').textContent = `Administrador: ${admin.name} · ${admin.id}`;
+    await loadOverview();
+    refreshTimer = setInterval(() => loadOverview(true), 10_000);
+  } catch {
+    showLogin();
+  }
+}
+
+$('#refresh').onclick = () => loadOverview();
+$('#enableMaintenance').onclick = () => action(
+  { action: 'maintenance', enabled: true },
+  'Ativar manutenção? Todas as salas serão encerradas e novas entradas ficarão suspensas.'
+);
+$('#disableMaintenance').onclick = () => action(
+  { action: 'maintenance', enabled: false },
+  'Reabrir o aplicativo para todos?'
+);
+
+start();

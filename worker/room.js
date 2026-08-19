@@ -98,7 +98,58 @@ export class Room extends DurableObject {
         viewers: this.viewers().length,
         maxViewers: MAX_VIEWERS,
         streams: this.broadcasters().filter(({ a }) => a.streaming).length,
+        droppedChunks: this.meta.droppedChunks ?? 0,
       });
+    }
+
+    if (url.pathname === '/admin/inspect') {
+      const state = this.roomState();
+      return json({
+        people: state.participants.length,
+        viewers: state.viewers,
+        streamCount: state.streams.length,
+        participants: state.participants.map((participant) => ({
+          ...participant,
+          role: this.broadcasters().some(({ a }) => a.uid === participant.id) ? 'broadcaster' : 'viewer',
+        })),
+        streams: state.streams.map((stream) => {
+          const broadcaster = this.broadcasters().find(({ a }) => a.slot === stream.slot)?.a;
+          return {
+            ...stream,
+            name: state.participants.find((participant) => participant.id === stream.userId)?.name ?? 'Usuário',
+            startedAt: broadcaster?.streamStartedAt ?? null,
+            config: broadcaster?.config ?? null,
+            audio: Boolean(broadcaster?.audioConfig),
+          };
+        }),
+        droppedChunks: this.meta.droppedChunks ?? 0,
+        locked: Boolean(this.meta.password),
+        listed: this.meta.listed !== false,
+      });
+    }
+
+    if (url.pathname === '/admin/kick' && request.method === 'POST') {
+      const { userId, banRoom, reason } = await request.json().catch(() => ({}));
+      const target = String(userId ?? '');
+      if (!target) return json({ error: 'Usuário inválido.' }, 400);
+      if (banRoom && !this.meta.banned.includes(target)) {
+        this.meta.banned.push(target);
+        await this.ctx.storage.put('meta', this.meta);
+      }
+      let disconnected = 0;
+      for (const socket of this.ctx.getWebSockets()) {
+        if (this.attachment(socket).uid !== target) continue;
+        disconnected++;
+        safeSend(socket, JSON.stringify({ type: 'kicked', reason: String(reason || 'Removido pela administração') }));
+        socket.close(1008, 'Removido pela administração');
+      }
+      this.broadcastState();
+      return json({ ok: true, disconnected });
+    }
+
+    if (url.pathname === '/admin/delete' && request.method === 'POST') {
+      const { reason } = await request.json().catch(() => ({}));
+      return this.destroy(String(reason || 'Encerrada pela administração'), 'Sala encerrada pela administração');
     }
 
     if (url.pathname === '/access/check' && request.method === 'POST') {
@@ -162,18 +213,7 @@ export class Room extends DurableObject {
         return json({ error: 'Só quem criou a sala pode excluí-la.' }, 403);
       }
 
-      const roomId = this.meta.id;
-      await this.ctx.storage.deleteAlarm();
-      await this.registry('/delete', { id: roomId });
-
-      for (const socket of this.ctx.getWebSockets()) {
-        safeSend(socket, JSON.stringify({ type: 'room-deleted' }));
-        socket.close(1000, 'Sala excluída pelo dono');
-      }
-
-      await this.ctx.storage.deleteAll();
-      this.meta = null;
-      return json({ ok: true });
+      return this.destroy('Excluída pelo dono', 'Sala excluída pelo dono');
     }
 
     return new Response('Not found', { status: 404 });
@@ -186,6 +226,8 @@ export class Room extends DurableObject {
       name: this.meta.name,
       ownerId: this.meta.ownerId,
       ownerName: this.meta.ownerName,
+      guildId: this.meta.guildId ?? null,
+      channelId: this.meta.channelId ?? null,
       isCall: Boolean(this.meta.isCall),
       locked: Boolean(this.meta.password),
       listed: this.meta.listed !== false,
@@ -248,7 +290,8 @@ export class Room extends DurableObject {
 
   broadcasterMessage(ws, a, msg) {
     if (msg.type === 'start') {
-      a.streaming = true; a.config = null; a.audioConfig = null; this.save(ws, a);
+      a.streaming = true; a.config = null; a.audioConfig = null; a.streamStartedAt = Date.now(); this.save(ws, a);
+      this.recordEvent('stream_started', a);
       for (const viewer of this.sockets('viewer')) {
         const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); this.save(viewer, va);
         safeSend(viewer, JSON.stringify({ type: 'stream-start', slot: a.slot, userId: a.uid }));
@@ -316,6 +359,8 @@ export class Room extends DurableObject {
 
   stopStream(ws, a) {
     if (!a.streaming) return;
+    const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;
+    this.recordEvent('stream_stopped', a, durationMs);
     a.streaming = false; a.config = null; a.audioConfig = null; this.save(ws, a);
     for (const viewer of this.sockets('viewer')) {
       const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); this.save(viewer, va);
@@ -331,6 +376,10 @@ export class Room extends DurableObject {
     if (!this.meta) return;
     const a = this.attachment(ws);
     if (a.role === 'broadcaster' && a.streaming) {
+      const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;
+      this.recordEvent('stream_stopped', a, durationMs, { reason: 'disconnect' });
+      a.streaming = false;
+      this.save(ws, a);
       for (const viewer of this.sockets('viewer')) safeSend(viewer, JSON.stringify({ type: 'stream-stop', slot: a.slot }));
     }
     this.broadcastState();
@@ -371,7 +420,7 @@ export class Room extends DurableObject {
   async alarm() {
     if (!this.meta) return;
     if (this.ctx.getWebSockets().length) return;
-    await this.registry('/delete', { id: this.meta.id });
+    await this.registry('/delete', { id: this.meta.id, reason: 'Sala vazia' });
     await this.ctx.storage.deleteAll();
     this.meta = null;
   }
@@ -381,5 +430,45 @@ export class Room extends DurableObject {
     return registry.fetch(`https://registry.internal${path}`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
     });
+  }
+
+  recordEvent(kind, attachment, durationMs = null, details = {}) {
+    this.ctx.waitUntil(this.registry('/event', {
+      kind,
+      roomId: this.meta?.id,
+      guildId: this.meta?.guildId,
+      channelId: this.meta?.channelId,
+      userId: attachment?.uid,
+      userName: attachment?.name,
+      durationMs,
+      details: {
+        ...details,
+        role: attachment?.role,
+        slot: attachment?.slot,
+        config: attachment?.config ?? null,
+        audio: Boolean(attachment?.audioConfig),
+      },
+    }));
+  }
+
+  async destroy(reason, socketReason) {
+    const roomId = this.meta.id;
+    for (const { ws, a } of this.broadcasters()) {
+      if (a.streaming) {
+        const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;
+        this.recordEvent('stream_stopped', a, durationMs, { reason: 'room_closed' });
+        a.streaming = false;
+        this.save(ws, a);
+      }
+    }
+    await this.ctx.storage.deleteAlarm();
+    await this.registry('/delete', { id: roomId, reason });
+    for (const socket of this.ctx.getWebSockets()) {
+      safeSend(socket, JSON.stringify({ type: 'room-deleted', reason }));
+      socket.close(1000, socketReason);
+    }
+    await this.ctx.storage.deleteAll();
+    this.meta = null;
+    return json({ ok: true });
   }
 }

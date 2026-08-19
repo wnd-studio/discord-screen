@@ -9,14 +9,14 @@
   <body>
     <main>
       <h1>Política de Privacidade</h1>
-      <p class="data">Última atualização: 18 de agosto de 2026</p>
+      <p class="data">Última atualização: 19 de agosto de 2026</p>
 
       <div class="resumo">
         <p><strong>Em resumo:</strong></p>
         <ul>
           <li>A sua tela e o seu áudio <strong>nunca são gravados</strong>. Eles atravessam o servidor em tempo real e são descartados no mesmo instante.</li>
-          <li>Não existe banco de dados. Nada é escrito em disco.</li>
-          <li>Do Discord recebemos apenas <strong>id, nome de usuário e foto de perfil</strong>. Não temos acesso ao seu e-mail, às suas mensagens nem à sua lista de servidores.</li>
+          <li>Guardamos por até <strong>90 dias</strong> somente metadados operacionais, como servidor, canal, horários, duração e quantidade de participantes.</li>
+          <li>Do Discord recebemos <strong>id, nome, foto e dados básicos do servidor atual</strong>. Não temos acesso ao seu e-mail nem às suas mensagens.</li>
           <li>Quando a sala esvazia, ela deixa de existir em cerca de 12 segundos — e tudo que havia nela some junto.</li>
         </ul>
       </div>
@@ -25,7 +25,7 @@
       <p>
         A Sala de Tela é uma atividade do Discord que permite compartilhar a tela com quem está na
         mesma sala. O código é aberto e está disponível em
-        <a href="https://github.com/Jc007zZ/discord-screen">github.com/Jc007zZ/discord-screen</a>.
+        <a href="https://github.com/wnd-studio/discord-screen">github.com/wnd-studio/discord-screen</a>.
       </p>
       <p>
         Esta política se aplica à instância operada neste endereço. Como o programa pode ser
@@ -37,7 +37,8 @@
 
       <h3>2.1 Dados recebidos do Discord</h3>
       <p>
-        Ao entrar, você autoriza o acesso apenas ao escopo <code>identify</code>. Com ele recebemos:
+        Ao entrar pela Atividade, você autoriza os escopos <code>identify</code> e
+        <code>guilds</code>. Com eles recebemos:
       </p>
       <ul>
         <li>o seu <strong>identificador numérico</strong> no Discord;</li>
@@ -45,8 +46,9 @@
         <li>o <strong>código da sua foto de perfil</strong>, usado para exibi-la.</li>
       </ul>
       <p>
-        Não recebemos e não temos como obter o seu e-mail, a sua senha, as suas mensagens, a sua
-        lista de amigos ou a lista de servidores dos quais você participa.
+        Não recebemos o seu e-mail, a sua senha, as suas mensagens nem a sua lista de amigos. O
+        Discord fornece temporariamente a lista básica de servidores para que o sistema identifique
+        o servidor em que a Atividade foi aberta; somente os dados desse servidor atual são guardados.
       </p>
       <p>
         Quando a atividade é aberta dentro de uma chamada, o Discord também informa os
@@ -66,7 +68,18 @@
         <li><strong>Senha da sala:</strong> guardada apenas em forma embaralhada (<em>hash</em> com sal, algoritmo scrypt). A senha original não fica registrada em lugar nenhum e não pode ser recuperada.</li>
       </ul>
 
-      <h3>2.3 Conteúdo transmitido</h3>
+      <h3>2.3 Metadados operacionais</h3>
+      <p>Para segurança, suporte e estatísticas do serviço, registramos:</p>
+      <ul>
+        <li>identificadores e nomes do servidor, canal e usuário;</li>
+        <li>horário de abertura da Atividade e criação ou encerramento de salas;</li>
+        <li>início, término e duração das transmissões;</li>
+        <li>quantidade de participantes, qualidade configurada, reconexões e falhas técnicas;</li>
+        <li>bloqueios e ações realizadas no painel administrativo.</li>
+      </ul>
+      <p>Esses registros não contêm imagens, áudio nem quadros da tela transmitida.</p>
+
+      <h3>2.4 Conteúdo transmitido</h3>
       <p>
         A imagem da sua tela e, se você escolher, o som são divididos em pedaços e repassados às
         pessoas que pediram para assistir. Esses pedaços passam pela memória do servidor apenas
@@ -81,8 +94,8 @@
 
       <h2>3. Onde os dados ficam</h2>
       <p>
-        Não existe banco de dados. O programa não grava arquivos: salas, participantes e senhas
-        embaralhadas vivem apenas na memória do processo enquanto ele está no ar.
+        Salas ativas ficam em Durable Objects da Cloudflare. O histórico operacional fica no banco
+        SQLite persistente do registro global, também dentro da infraestrutura Cloudflare.
       </p>
       <div class="tabela">
         <table>
@@ -96,7 +109,7 @@
           <tbody>
             <tr>
               <td>Sala, participantes, senha embaralhada</td>
-              <td>Memória do servidor</td>
+              <td>Durable Object da sala</td>
               <td>Até cerca de 12 segundos depois de a sala ficar vazia</td>
             </tr>
             <tr>
@@ -114,17 +127,27 @@
               <td>Memória do servidor, em cache</td>
               <td>Até ser descartada por entrada mais nova</td>
             </tr>
+            <tr>
+              <td>Metadados operacionais de uso e transmissão</td>
+              <td>SQLite persistente em Durable Object</td>
+              <td>Até 90 dias; totais por servidor podem permanecer enquanto o serviço existir</td>
+            </tr>
+            <tr>
+              <td>Bloqueios e ações administrativas</td>
+              <td>SQLite persistente em Durable Object</td>
+              <td>Até o bloqueio ser removido ou o histórico deixar de ser necessário</td>
+            </tr>
           </tbody>
         </table>
       </div>
       <p>
-        Reiniciar o servidor apaga tudo que estava em memória. Mensagens de diagnóstico podem
-        aparecer no terminal de quem opera a instalação, mas o programa não grava arquivos de log.
+        O encerramento de uma sala apaga seu estado e sua senha embaralhada. O histórico operacional
+        não inclui o conteúdo transmitido e possui limpeza automática dos eventos antigos.
       </p>
 
       <h2>4. Armazenamento no seu navegador</h2>
       <p>
-        Não usamos cookies e não há rastreadores. O que existe são estas chaves no
+        Para usuários comuns não usamos cookies nem rastreadores. O que existe são estas chaves no
         <code>localStorage</code> do seu navegador, todas removíveis a qualquer momento limpando os
         dados do site:
       </p>
@@ -134,9 +157,16 @@
         <li><code>sala:&lt;id&gt;</code> — permissão de voltar a uma sala em que você já entrou, para que atualizar a página não exija digitar a senha de novo.</li>
         <li><code>volume</code> e <code>stripW</code> — preferências de volume e largura da barra lateral.</li>
       </ul>
+      <p>
+        O painel administrativo usa um cookie seguro, inacessível ao JavaScript, que dura até 12
+        horas e serve apenas para manter a sessão do proprietário do aplicativo.
+      </p>
 
       <h2>5. Com quem os dados são compartilhados</h2>
-      <p>Não vendemos, alugamos nem cedemos dados a ninguém. Não há publicidade nem analytics.</p>
+      <p>
+        Não vendemos, alugamos nem cedemos dados a ninguém. Não há publicidade nem rastreamento
+        comercial; existem somente as métricas operacionais descritas nesta política.
+      </p>
       <ul>
         <li>
           <strong>Discord:</strong> autentica você e fornece a foto de perfil. O uso dos dados pelo
@@ -156,8 +186,7 @@
         não precisa se conectar diretamente ao Discord para exibi-la.
       </p>
       <p>
-        Dados podem ser divulgados se houver ordem judicial ou obrigação legal — na prática, porém,
-        não há histórico a entregar: nada é retido.
+        Dados existentes podem ser divulgados se houver ordem judicial ou obrigação legal.
       </p>
 
       <h2>6. Segurança</h2>
@@ -166,6 +195,8 @@
         <li>Senhas de sala são guardadas apenas embaralhadas, com sal individual.</li>
         <li>Tentativas repetidas de senha são bloqueadas temporariamente.</li>
         <li>Os crachás de acesso são assinados; um crachá adulterado é recusado.</li>
+        <li>O painel administrativo exige login com a conta proprietária do aplicativo.</li>
+        <li>Eventos enviados pelo Discord têm a assinatura criptográfica conferida.</li>
         <li>O servidor confere de quem vem cada pedaço de vídeo antes de repassá-lo.</li>
       </ul>
       <p>
@@ -176,11 +207,11 @@
       <h2>7. Os seus direitos</h2>
       <p>
         A Lei Geral de Proteção de Dados (Lei 13.709/2018) garante a você o direito de confirmar,
-        acessar, corrigir e eliminar os seus dados. Como não há armazenamento persistente, o
-        exercício desses direitos é imediato:
+        acessar, corrigir e eliminar os seus dados:
       </p>
       <ul>
-        <li><strong>Eliminar:</strong> saia da sala. Quando ela esvazia, tudo que havia nela deixa de existir.</li>
+        <li><strong>Eliminar a sala:</strong> saia dela. Quando esvazia, seu estado deixa de existir.</li>
+        <li><strong>Solicitar dados ou exclusão do histórico:</strong> contate o operador pelo repositório indicado abaixo, informando somente o necessário para localizar o pedido.</li>
         <li><strong>Corrigir:</strong> troque o apelido pelo botão de perfil.</li>
         <li><strong>Apagar do seu lado:</strong> limpe os dados do site no navegador.</li>
         <li><strong>Revogar o acesso:</strong> em Configurações do Discord → Aplicativos Autorizados, remova a autorização a qualquer momento.</li>
@@ -206,10 +237,9 @@
         política:
       </p>
       <ul>
-        <li>E-mail: <a href="mailto:contato@exemplo.com">contato@exemplo.com</a></li>
         <li>
           Repositório:
-          <a href="https://github.com/Jc007zZ/discord-screen/issues">github.com/Jc007zZ/discord-screen/issues</a>
+          <a href="https://github.com/wnd-studio/discord-screen/issues">github.com/wnd-studio/discord-screen/issues</a>
         </li>
       </ul>
 

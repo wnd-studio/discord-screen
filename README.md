@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.3.0-22C55E?style=flat-square" alt="Versão 0.3.0">
+    <img src="https://img.shields.io/badge/versao-0.4.0-22C55E?style=flat-square" alt="Versão 0.4.0">
   </p>
 
   <p>
@@ -105,6 +105,10 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Convites com prazo de validade | ✅ Expiram em 8 horas |
 | Remoção de participantes pelo dono | ✅ Disponível nas salas web |
 | Exclusão manual da sala pelo dono | ✅ Disponível nas salas web |
+| Painel administrativo protegido | ✅ Disponível em `/admin` |
+| Histórico de uso por servidor | ✅ Retenção operacional de 90 dias |
+| Encerramento e bloqueios administrativos | ✅ Usuário, servidor ou sala |
+| Eventos de instalação do Discord | ✅ Webhook assinado |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Áudio de abas do navegador | ✅ Opus |
 | Múltiplos transmissores | ✅ Até 4 por sala |
@@ -114,6 +118,17 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 
 O transmissor também interrompe a codificação quando ninguém está assistindo, reduzindo consumo de processamento e da cota da Cloudflare.
 
+### Painel administrativo
+
+Abra `https://SEU_HOST/admin` e entre com o Discord. O proprietário da aplicação e os membros da
+equipe cadastrada no Developer Portal são reconhecidos automaticamente. IDs extras podem ser
+adicionados em `ADMIN_DISCORD_IDS`.
+
+O painel mostra salas ativas, participantes, transmissões, servidores onde a Atividade foi usada,
+histórico de 90 dias e ações administrativas. É possível encerrar salas, desconectar ou bloquear
+usuários, bloquear servidores e ativar o modo de manutenção. Nenhuma imagem ou áudio da transmissão
+é exibido ou armazenado no painel.
+
 ## Arquitetura
 
 ```mermaid
@@ -121,7 +136,7 @@ flowchart LR
     U[Discord Activity ou navegador]
     W[Cloudflare Worker]
     D[Discord OAuth2]
-    G[RoomRegistry Durable Object]
+    G[RoomRegistry + histórico administrativo]
     R[Room Durable Object]
     A[Static Assets]
 
@@ -136,7 +151,7 @@ flowchart LR
 ### Componentes principais
 
 - **Worker + Static Assets:** frontend, APIs, autenticação, página de captura, termos e privacidade.
-- **`RoomRegistry` Durable Object:** índice persistente das salas por instância.
+- **`RoomRegistry` Durable Object:** índice persistente das salas, histórico operacional, servidores conhecidos, bloqueios e auditoria administrativa.
 - **`Room` Durable Object:** uma unidade isolada por sala, responsável por participantes, senha, estado, WebSockets e relay binário.
 - **Discord OAuth2:** troca o código de autorização e consulta o perfil no backend. O Client Secret nunca chega ao navegador.
 - **WebCodecs:** codifica vídeo em H.264, VP8 ou VP9, de acordo com o suporte do navegador, e áudio em Opus.
@@ -152,6 +167,9 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - convites privados possuem prazo de validade;
 - senhas de sala não são armazenadas em texto puro;
 - áudio e vídeo não são gravados em banco de dados ou filesystem;
+- o histórico contém somente metadados operacionais e eventos antigos são removidos depois de 90 dias;
+- o painel `/admin` usa cookie seguro e aceita somente o proprietário/equipe da aplicação ou IDs explicitamente autorizados;
+- eventos do Discord são aceitos apenas após validação da assinatura Ed25519;
 - o frontend só recebe as informações necessárias para a sessão atual.
 
 ## Limitações atuais
@@ -163,7 +181,7 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - Captura e reprodução dependem do suporte a WebCodecs. Navegadores incompatíveis podem não conseguir transmitir ou assistir.
 - Uma interrupção na conexão do transmissor pode exigir que o compartilhamento seja iniciado novamente.
 - O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
-- A remoção de uma pessoa vale enquanto a sala existir. Salas vazias são eliminadas automaticamente e não mantêm uma lista permanente de banidos.
+- A remoção feita pelo dono vale enquanto a sala existir; a administração também pode aplicar bloqueios persistentes a usuários ou servidores.
 
 ---
 
@@ -215,6 +233,8 @@ Preencha `.dev.vars` com as credenciais de desenvolvimento. O arquivo real é ig
 | Variável | Finalidade |
 |---|---|
 | `DISCORD_BOT_TOKEN` | Permite conferir a presença do participante no canal de voz |
+| `ADMIN_DISCORD_IDS` | IDs adicionais autorizados no painel, separados por vírgula; o proprietário da aplicação já é reconhecido automaticamente |
+| `DISCORD_PUBLIC_KEY` | Chave pública para validar webhooks; normalmente é descoberta automaticamente pela API do Discord |
 
 Nunca coloque valores reais desses secrets no código ou no repositório.
 
@@ -268,6 +288,8 @@ Para a URL pública `https://tela.seudominio.com`, configure:
 - **Activities → URL Mappings → `/`:** `tela.seudominio.com` (sem `https://`)
 - **Installation Contexts:** `User Install` e `Guild Install`
 - **Default Install Scope:** `applications.commands`
+- **Webhooks → Endpoint URL:** `https://tela.seudominio.com/api/discord/events`
+- **Webhook Events:** `APPLICATION_AUTHORIZED` e `APPLICATION_DEAUTHORIZED`
 
 Se utilizar um endereço `workers.dev`, coloque exatamente esse mesmo host nos campos. Não adicione barra final ao redirect e mantenha `PUBLIC_ORIGIN` idêntico ao endereço publicado.
 
@@ -280,7 +302,8 @@ Se utilizar um endereço `workers.dev`, coloque exatamente esse mesmo host nos c
 | `pnpm build` | Monta o frontend e reúne os assets públicos |
 | `pnpm dev` | Inicia Worker e Durable Objects localmente |
 | `pnpm check` | Valida o bundle com um dry-run do Wrangler |
-| `pnpm smoke` | Testa HTTP, salas, senha, moderação, WebSocket e relay |
+| `pnpm test:webhook` | Valida a assinatura Ed25519 dos eventos do Discord |
+| `pnpm smoke` | Testa HTTP, salas, senha, painel administrativo, bloqueios, WebSocket e relay |
 | `pnpm deploy` | Executa o build e publica na Cloudflare |
 | `pnpm cf:typegen` | Gera tipos dos bindings Cloudflare |
 
