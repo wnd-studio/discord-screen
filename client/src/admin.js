@@ -258,7 +258,7 @@ function showLogin() {
   login.hidden = false;
   clearInterval(refreshTimer);
   const error = new URLSearchParams(location.search).get('erro');
-  if (error === 'sem_acesso') $('#loginMessage').textContent = 'Esta conta não é proprietária nem administradora do aplicativo no Discord.';
+  if (error === 'sem_acesso') $('#loginMessage').textContent = 'Esta conta ainda não foi autorizada para administrar o aplicativo. Confira ADMIN_DISCORD_IDS na Cloudflare.';
   else if (error) $('#loginMessage').textContent = 'Não foi possível concluir a entrada. Tente novamente.';
 }
 
