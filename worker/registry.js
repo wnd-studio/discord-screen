@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { json } from './http.js';
 
 const MAX_ROOMS_PER_INSTANCE = 20;
+const STALE_ROOM_GRACE_MS = 30_000;
 
 export class RoomRegistry extends DurableObject {
   constructor(ctx, env) {
@@ -36,7 +37,31 @@ export class RoomRegistry extends DurableObject {
       ).toArray();
       const rooms = await Promise.all(rows.map(async (row) => {
         const stub = this.env.ROOMS.get(this.env.ROOMS.idFromName(row.id));
-        const live = await stub.fetch('https://room.internal/summary').then((r) => r.json()).catch(() => ({}));
+        const response = await stub.fetch('https://room.internal/summary').catch(() => null);
+
+        // Versões antigas podiam apagar o objeto da sala sem retirar sua linha
+        // do índice. A linha órfã aparecia para sempre como "0 pessoas". Não
+        // apagamos uma sala recém-criada porque existe uma janela curta entre
+        // registrar o id e inicializar o Durable Object.
+        if (!response?.ok) {
+          if (
+            response?.status === 404 &&
+            Date.now() - Number(row.created_at) >= STALE_ROOM_GRACE_MS
+          ) {
+            this.ctx.storage.sql.exec('DELETE FROM rooms WHERE id = ?', row.id);
+          }
+          return null;
+        }
+
+        const live = await response.json().catch(() => ({}));
+        // Depois da carência inicial, uma sala sem ninguém já está a caminho
+        // da exclusão e não deve ocupar o lobby como um cartão de 0 pessoas.
+        if (
+          Number(live.people ?? 0) === 0 &&
+          Date.now() - Number(row.created_at) >= STALE_ROOM_GRACE_MS
+        ) {
+          return null;
+        }
         return {
           id: row.id,
           name: row.name,
@@ -46,7 +71,7 @@ export class RoomRegistry extends DurableObject {
           streams: live.streams ?? 0,
         };
       }));
-      return json({ rooms });
+      return json({ rooms: rooms.filter(Boolean) });
     }
 
     if (url.pathname === '/put') {

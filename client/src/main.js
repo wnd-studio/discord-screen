@@ -1564,7 +1564,7 @@ function connect() {
       available.delete(msg.slot);
       watching.delete(msg.slot);
       endStream(msg.slot);
-    } else if (msg.type === 'room-gone') {
+    } else if (msg.type === 'room-gone' || msg.type === 'room-deleted') {
       roomTokens = null;
       // No Discord a sala é a da call: ela é recriada e a atividade volta para
       // ela. No site, quem some é a sala escolhida, então o lugar é a lista.
@@ -1572,7 +1572,7 @@ function connect() {
         limparSala();
         entrarNaCall();
       } else {
-        toast('A sala foi fechada.', true);
+        toast(msg.type === 'room-deleted' ? 'A sala foi excluída.' : 'A sala foi fechada.', true);
         showLobby();
       }
     } else if (msg.type === 'kicked') {
@@ -1920,6 +1920,31 @@ $('roomSave').addEventListener('click', async () => {
     toast(r.listed ? 'Ajustes salvos.' : 'Sala privada. Entre somente pelo link.');
   } catch (err) {
     toast(err.message, true);
+  }
+});
+
+$('roomDelete').addEventListener('click', async () => {
+  if (!roomTokens?.roomId || !roomInfo) return;
+  const confirmed = window.confirm(
+    `Excluir a sala "${roomInfo.name}"? Todos serão desconectados e esta ação não pode ser desfeita.`
+  );
+  if (!confirmed) return;
+
+  $('roomDelete').disabled = true;
+  try {
+    await post(`${P}/api/rooms/delete`, {
+      identity: session.identity,
+      roomId: roomTokens.roomId,
+    });
+    $('roomModal').hidden = true;
+    if (inRoom()) {
+      toast('Sala excluída.');
+      showLobby();
+    }
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('roomDelete').disabled = false;
   }
 });
 

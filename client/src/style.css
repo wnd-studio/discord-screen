@@ -788,6 +788,19 @@ button {
   background: #4752c4;
 }
 
+.btn.danger {
+  margin-right: auto;
+  background: transparent;
+  color: #ffb3b6;
+  box-shadow: inset 0 0 0 1px rgba(242, 63, 67, 0.65);
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: none;
+}
+
 /* Você está transmitindo — encerrar */
 .btn.live {
   background: var(--danger);

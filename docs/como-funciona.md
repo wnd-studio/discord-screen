@@ -35,7 +35,8 @@ Eventos de controle preservados:
 - broadcaster → sala: `start`, `config`, `audio-config`, `stop`;
 - viewer → sala: `rename`, `watch`, `unwatch`, `stop-broadcast`, `kick` (dono);
 - sala → clientes: `state`, `stream-start`, `config`, `audio-config`,
-  `stream-stop`, `need-keyframe`, `stop-request`, `kicked`, `error`.
+  `stream-stop`, `need-keyframe`, `stop-request`, `kicked`, `room-deleted`,
+  `error`.
 
 ## Estado e hibernação
 
@@ -43,7 +44,9 @@ Metadados e senhas ficam no storage SQLite do Durable Object. Conexões usam a
 WebSocket Hibernation API; papel, usuário, slot, configurações e telas assistidas
 ficam em attachments serializados, permitindo reconstruir a sala quando o objeto
 acorda. Salas vazias recebem um alarm de 12 segundos e depois removem seus dados
-e a entrada no índice.
+e a entrada no índice. O dono também pode excluir uma sala web imediatamente;
+todos os participantes recebem `room-deleted` e são desconectados. Ao listar,
+entradas antigas cujo objeto já não existe são removidas automaticamente.
 
 ## Segurança
 

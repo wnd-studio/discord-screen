@@ -6,7 +6,8 @@ const post = async (path, payload) => {
   const response = await fetch(`${base}${path}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
   });
-  const data = await response.json();
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : {};
   return { response, data };
 };
 
@@ -66,6 +67,28 @@ assert.equal(published.response.status, 200);
 assert.equal(published.data.listed, true);
 const visibleList = await post('/api/rooms/list', { identity: guest.data.identity });
 assert.equal(visibleList.data.rooms.some((room) => room.id === privateRoom.data.roomId), true);
+assert.equal(visibleList.data.rooms.some((room) => /^(call|atividade)-/.test(room.id)), false);
+
+// Em desenvolvimento conseguimos emitir uma identidade de Activity sem falar
+// com o Discord. Em produção essa rota retorna 404 e o teste é simplesmente
+// ignorado. Quando disponível, comprova que a sala da call não vaza no lobby e
+// não pode ser apagada manualmente.
+const devCall = await post('/api/session-dev', {
+  instance_id: `smoke-${Date.now()}`,
+  name: 'Teste da call',
+  call: '123456789012345678',
+});
+if (devCall.response.status === 200) {
+  const callRoom = await post('/api/rooms/call', { identity: devCall.data.identity });
+  assert.equal(callRoom.response.status, 200);
+  const callList = await post('/api/rooms/list', { identity: devCall.data.identity });
+  assert.equal(callList.data.rooms.some((room) => room.id === callRoom.data.roomId), false);
+  const deleteCall = await post('/api/rooms/delete', {
+    identity: devCall.data.identity,
+    roomId: callRoom.data.roomId,
+  });
+  assert.equal(deleteCall.response.status, 403);
+}
 
 const openSocket = (token) => new WebSocket(`${socketBase}/ws?t=${encodeURIComponent(token)}`);
 const waitJson = (ws, type) => new Promise((resolve, reject) => {
@@ -118,6 +141,39 @@ const blocked = await post('/api/rooms/join', {
 });
 assert.equal(blocked.response.status, 403);
 assert.equal(blocked.data.reason, 'removido');
+
+const forbiddenDelete = await post('/api/rooms/delete', {
+  identity: visitor.data.identity,
+  roomId: created.data.roomId,
+});
+assert.equal(forbiddenDelete.response.status, 403);
+
+const viewerDeleted = waitJson(viewer, 'room-deleted');
+const broadcasterDeleted = waitJson(broadcaster, 'room-deleted');
+const deleted = await post('/api/rooms/delete', {
+  identity: guest.data.identity,
+  roomId: created.data.roomId,
+});
+assert.equal(deleted.response.status, 200);
+assert.equal(deleted.data.ok, true);
+await Promise.all([viewerDeleted, broadcasterDeleted]);
+
+const gone = await post('/api/rooms/join', {
+  identity: guest.data.identity,
+  roomId: created.data.roomId,
+  password: 'segredo',
+});
+assert.equal(gone.response.status, 404);
+
+const deletedPrivate = await post('/api/rooms/delete', {
+  identity: guest.data.identity,
+  roomId: privateRoom.data.roomId,
+});
+assert.equal(deletedPrivate.response.status, 200);
+
+const afterDelete = await post('/api/rooms/list', { identity: guest.data.identity });
+assert.equal(afterDelete.data.rooms.some((room) => room.id === created.data.roomId), false);
+assert.equal(afterDelete.data.rooms.some((room) => room.id === privateRoom.data.roomId), false);
 
 viewer.close();
 broadcaster.close();
