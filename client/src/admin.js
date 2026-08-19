@@ -169,7 +169,7 @@ function renderServers(servers) {
     row.append(el('td', '', number(server.launches)));
     row.append(el('td', '', date(server.lastSeen)));
     const state = document.createElement('td');
-    state.append(el('span', `badge ${server.installed ? 'installed' : ''}`, server.installed ? 'Instalado' : 'Uso registrado'));
+    state.append(el('span', `badge ${server.installed ? 'installed' : ''}`, server.installed ? 'Autorizado' : 'Uso registrado'));
     row.append(state);
     const controls = document.createElement('td');
     const button = el('button', 'button danger-outline small', 'Bloquear');

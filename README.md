@@ -108,7 +108,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Painel administrativo protegido | ✅ Disponível em `/admin` |
 | Histórico de uso por servidor | ✅ Retenção operacional de 90 dias |
 | Encerramento e bloqueios administrativos | ✅ Usuário, servidor ou sala |
-| Eventos de instalação do Discord | ✅ Webhook assinado |
+| Eventos de autorização do Discord | ✅ Webhook assinado |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Áudio de abas do navegador | ✅ Opus |
 | Múltiplos transmissores | ✅ Até 4 por sala |
@@ -182,6 +182,7 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - Uma interrupção na conexão do transmissor pode exigir que o compartilhamento seja iniciado novamente.
 - O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
 - A remoção feita pelo dono vale enquanto a sala existir; a administração também pode aplicar bloqueios persistentes a usuários ou servidores.
+- O Discord informa qual servidor autorizou a aplicação, mas o evento de desautorização não traz o servidor. Por isso o painel mantém o histórico de uso/autorização e mostra separadamente a contagem aproximada de instalações atuais fornecida pelo Discord.
 
 ---
 
