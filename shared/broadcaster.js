@@ -71,6 +71,7 @@ export function supportError({ requireChromium = false } = {}) {
  * @param {(stats:object)=>void} [opts.onStats]  viewers, fps, mbps, segundos no ar
  * @param {(reason:string)=>void} [opts.onEnd]   encerrou (por qualquer motivo)
  * @param {(msg:string)=>void} [opts.onAviso]    algo mudou sem ser erro
+ * @param {(info:object)=>void} [opts.onAudioStatus] estado da captura de som
  * @param {(msg:string)=>void} [opts.onError]
  */
 export function createBroadcaster({
@@ -83,6 +84,7 @@ export function createBroadcaster({
   onEnd,
   onError,
   onAviso,
+  onAudioStatus,
 }) {
   let ws = null;
   let stream = null;
@@ -114,10 +116,10 @@ export function createBroadcaster({
     // Precisa vir do gesto do usuário; qualquer await antes disso o invalida.
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: { ideal: fps, max: fps } },
-      // systemAudio: 'include' pede o som do computador em vez de só o da aba.
-      // Os tratamentos de voz ficam desligados: eles existem para microfone e,
-      // em som de aplicativo, cortam justamente o que se queria ouvir.
       audio: audio ? audioConstraints() : false,
+      // Estes são hints de DisplayMediaStreamOptions (nível superior), não
+      // restrições da faixa de áudio. Dentro de `audio` o Chromium os ignorava.
+      ...(audio ? { systemAudio: 'include', windowAudio: 'system' } : {}),
     });
 
     const track = stream.getVideoTracks()[0];
@@ -174,7 +176,18 @@ export function createBroadcaster({
     // Pedir áudio não garante receber: em vários sistemas a caixa "compartilhar
     // o som" fica desmarcada, e o navegador devolve a tela sem faixa de som.
     const audioTrack = prepararSom(track, stream);
-    if (audioTrack) pumpAudio(audioTrack);
+    if (audioTrack) {
+      const source = track.getSettings?.().displaySurface === 'browser' ? 'tab' : 'system';
+      pumpAudio(audioTrack, source);
+    }
+    else if (audio) {
+      onAudioStatus?.({ active: false, reason: 'missing' });
+      onAviso?.(
+        'A transmissão começou sem áudio. Na janela do navegador, escolha uma fonte com som e ative “Compartilhar áudio”.'
+      );
+    } else {
+      onAudioStatus?.({ active: false, reason: 'disabled' });
+    }
 
     return stream;
   }
@@ -191,7 +204,6 @@ export function createBroadcaster({
    */
   function audioConstraints() {
     const c = {
-      systemAudio: 'include',
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
@@ -203,7 +215,7 @@ export function createBroadcaster({
   }
 
 /**
-   * Devolve a faixa de som, ou null quando ela traria a call de volta em eco.
+   * Devolve a faixa de som que o navegador realmente entregou.
    *
    * O nó: o som do sistema é capturado como uma mistura única, e nenhum
    * navegador expõe um jeito de tirar um processo dela. O Windows tem essa API
@@ -213,24 +225,23 @@ export function createBroadcaster({
    *
    * Aba é diferente: o som sai só daquela aba, e o Discord nunca entra.
    *
-   * Por isso a mistura do sistema é recusada aqui, antes de sair da máquina. O
-   * que evita a versão anterior disto virar um beco sem saída é `trocarSom()`:
-   * dá para manter o vídeo da tela inteira e pegar o som de uma aba.
+   * O comportamento antigo descartava automaticamente essa faixa em tela
+   * inteira. Isso surpreendia quem havia marcado “compartilhar áudio” e era a
+   * principal origem das transmissões mudas. Agora respeitamos a escolha e
+   * avisamos sobre o possível eco, sem remover o áudio.
    */
   function prepararSom(videoTrack, capturado) {
     const faixa = capturado.getAudioTracks()[0];
     if (!faixa) return null;
 
-    if (videoTrack.getSettings?.().displaySurface === 'browser') return faixa;
-
-    faixa.stop();
-    capturado.removeTrack(faixa);
-    somBloqueado = true;
-    onAviso?.(
-      'A tela inteira carrega o som do Discord junto, e a call se ouviria em eco. ' +
-        'Transmitindo sem som — use "Som de uma aba" para escolher de onde vem o áudio.'
-    );
-    return null;
+    const superficie = videoTrack.getSettings?.().displaySurface;
+    somBloqueado = false;
+    if (superficie !== 'browser') {
+      onAviso?.(
+        'Áudio do sistema ativo. Ele pode incluir a voz do Discord; se houver eco, use “Trocar fonte do áudio” e escolha uma aba.'
+      );
+    }
+    return faixa;
   }
 
   /**
@@ -246,6 +257,8 @@ export function createBroadcaster({
     const escolha = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: audioConstraints(),
+      systemAudio: 'include',
+      windowAudio: 'system',
     });
 
     const faixa = escolha.getAudioTracks()[0];
@@ -281,7 +294,7 @@ export function createBroadcaster({
 
     somBloqueado = false;
     faixa.addEventListener('ended', () => onAviso?.('A aba do som foi fechada.'));
-    pumpAudio(faixa);
+    pumpAudio(faixa, 'tab');
     return faixa;
   }
 
@@ -294,8 +307,12 @@ export function createBroadcaster({
    * pacotes Opus de 20 ms — não é preciso reagrupar nada por fora. Cada pacote
    * se decodifica sozinho, então não existe aqui o equivalente ao keyframe.
    */
-  async function pumpAudio(track) {
-    if (!window.AudioEncoder || !window.MediaStreamTrackProcessor) return;
+  async function pumpAudio(track, source = 'system') {
+    if (!window.AudioEncoder || !window.MediaStreamTrackProcessor) {
+      onAudioStatus?.({ active: false, reason: 'unsupported' });
+      onAviso?.('Este navegador não consegue codificar o áudio da transmissão. Use Chrome ou Edge atualizado.');
+      return;
+    }
 
     const s = track.getSettings();
     const sampleRate = s.sampleRate || 48_000;
@@ -305,14 +322,22 @@ export function createBroadcaster({
       audioEncoder = new AudioEncoder({
         output: onAudioEncoded,
         // Som é acessório: se o encoder cair, a tela continua no ar.
-        error: (err) => console.warn('[audio encoder]', err.message),
+        error: (err) => {
+          console.warn('[audio encoder]', err.message);
+          onAudioStatus?.({ active: false, reason: 'encoder' });
+          onAviso?.(`O áudio parou: ${err.message}`);
+        },
       });
       audioEncoder.configure({ codec: 'opus', sampleRate, numberOfChannels, bitrate: AUDIO_BITRATE });
     } catch (err) {
       console.warn('[audio encoder]', err.message);
       audioEncoder = null;
+      onAudioStatus?.({ active: false, reason: 'encoder' });
+      onAviso?.(`Não foi possível iniciar o áudio: ${err.message}`);
       return;
     }
+
+    onAudioStatus?.({ active: true, source });
 
     // O mesmo caminho do vídeo: quem chega depois recebe isto ao pedir a tela.
     ws?.send(
@@ -648,6 +673,7 @@ export function createBroadcaster({
     const fresh = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: { ideal: fps, max: fps } },
       audio: audio ? audioConstraints() : false,
+      ...(audio ? { systemAudio: 'include', windowAudio: 'system' } : {}),
     });
 
     const previous = stream;
@@ -681,7 +707,18 @@ export function createBroadcaster({
     await audioReader?.cancel().catch(() => {});
     audioReader = null;
     const novoAudio = prepararSom(track, fresh);
-    if (novoAudio && audioEncoder) pumpAudio(novoAudio);
+    if (audioEncoder?.state === 'configured') {
+      try { audioEncoder.close(); } catch {}
+    }
+    audioEncoder = null;
+    if (novoAudio) {
+      const source = track.getSettings?.().displaySurface === 'browser' ? 'tab' : 'system';
+      pumpAudio(novoAudio, source);
+    }
+    else if (audio) {
+      onAudioStatus?.({ active: false, reason: 'missing' });
+      onAviso?.('A nova tela foi compartilhada sem áudio. Ative “Compartilhar áudio” no seletor do navegador.');
+    }
 
     return fresh;
   }

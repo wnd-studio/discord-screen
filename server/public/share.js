@@ -145,8 +145,18 @@ async function start() {
     },
     onAviso: (msg) => {
       setStatus(msg, 'aviso');
-      // O aviso sozinho é um beco: o botão é a saída dele.
+      // O botão permite trocar para áudio isolado de uma aba quando necessário.
       $('somAba').hidden = false;
+    },
+    onAudioStatus: ({ active, source }) => {
+      const badge = $('audioBadge');
+      badge.classList.toggle('off', !active);
+      badge.classList.toggle('on', active);
+      badge.textContent = active
+        ? source === 'tab' ? 'Áudio da aba ativo' : 'Áudio do sistema ativo'
+        : 'Sem áudio';
+      // Mesmo sem áudio inicial, a pessoa consegue corrigir sem reiniciar vídeo.
+      $('somAba').hidden = active && source === 'tab';
     },
     onEnd: (reason) => {
       broadcaster = null;
@@ -181,7 +191,7 @@ $('somAba').addEventListener('click', async () => {
   try {
     await broadcaster.trocarSom();
     setStatus('Som ligado, vindo da aba escolhida.', 'ok');
-    $('somAba').textContent = 'Trocar a aba do som';
+    $('somAba').textContent = 'Trocar fonte do áudio';
   } catch (err) {
     if (err.name !== 'NotAllowedError') setStatus(err.message, 'error');
   }

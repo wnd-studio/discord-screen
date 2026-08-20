@@ -154,6 +154,31 @@ button:disabled {
   font-weight: 600;
 }
 
+.live-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.audio-badge {
+  margin-bottom: 14px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.audio-badge.on {
+  color: var(--ok);
+  background: rgba(35, 165, 90, 0.14);
+}
+
+.audio-badge.off {
+  color: #f0b232;
+  background: rgba(240, 178, 50, 0.13);
+}
+
 .dot {
   width: 8px;
   height: 8px;

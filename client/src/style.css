@@ -292,7 +292,8 @@ body {
 
 /* Canto inferior direito: livre, já que o nome fica à esquerda e o "você" em
    cima. Aparece ao passar o mouse para não poluir a grade parada. */
-.tile-stop {
+.tile-stop,
+.tile-volume {
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -310,7 +311,14 @@ body {
   transition: opacity 0.15s, background 0.15s;
 }
 
-.tile:hover .tile-stop {
+.tile-volume {
+  right: 46px;
+}
+
+.tile:hover .tile-stop,
+.tile:hover .tile-volume,
+.tile-stop:focus-visible,
+.tile-volume:focus-visible {
   opacity: 1;
 }
 
@@ -318,7 +326,12 @@ body {
   background: var(--danger);
 }
 
-.tile-stop svg {
+.tile-volume:hover {
+  background: var(--accent);
+}
+
+.tile-stop svg,
+.tile-volume svg {
   width: 15px;
   height: 15px;
   fill: none;

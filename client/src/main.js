@@ -389,6 +389,23 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
       unwatchSlot(slot);
     });
     tile.append(stop);
+
+    // Controle visível: o ajuste individual já existia no clique direito,
+    // mas esse gesto não é descoberto pela maioria e nem existe no celular.
+    if (stream.audio) {
+      const streamVolume = document.createElement('button');
+      streamVolume.className = 'tile-volume';
+      streamVolume.dataset.tip = `Volume de ${p.name}`;
+      streamVolume.setAttribute('aria-label', `Ajustar volume de ${p.name}`);
+      streamVolume.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>';
+      streamVolume.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const box = streamVolume.getBoundingClientRect();
+        openTileMenu(box.right - 220, box.top, slot, p.name);
+      });
+      tile.append(streamVolume);
+    }
   } else if (slot !== null) {
     // O convite tem botão próprio, que para o clique antes de chegar no tile.
     if (!palco) tile.addEventListener('click', aoClicar);
@@ -807,6 +824,7 @@ function startAudio(slot, config) {
     s.audio = null;
     return;
   }
+  renderGrid();
   renderBar();
 }
 
