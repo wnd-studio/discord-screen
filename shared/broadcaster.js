@@ -71,6 +71,7 @@ export function supportError({ requireChromium = false } = {}) {
  * @param {(stats:object)=>void} [opts.onStats]  viewers, fps, mbps, segundos no ar
  * @param {(reason:string)=>void} [opts.onEnd]   encerrou (por qualquer motivo)
  * @param {(msg:string)=>void} [opts.onAviso]    algo mudou sem ser erro
+ * @param {(msg:string)=>void} [opts.onPerformance] ajuste automático de carga
  * @param {(info:object)=>void} [opts.onAudioStatus] estado da captura de som
  * @param {(msg:string)=>void} [opts.onError]
  */
@@ -84,6 +85,7 @@ export function createBroadcaster({
   onEnd,
   onError,
   onAviso,
+  onPerformance,
   onAudioStatus,
 }) {
   let ws = null;
@@ -109,8 +111,18 @@ export function createBroadcaster({
   let startedAt = 0;
   let bytes = 0;
   let frames = 0;
+  let receivedFrames = 0;
+  let droppedFrames = 0;
   let viewers = 0;
   let statsTimer = null;
+
+  // A escolha da pessoa é o teto. O modo adaptativo só desce temporariamente
+  // quando o encoder não acompanha e volta a subir depois de estabilizar.
+  let requestedBitrate = bitrate;
+  let requestedFps = fps;
+  let adaptiveLevel = 0;
+  let overloadedSeconds = 0;
+  let stableSeconds = 0;
 
   async function start() {
     // Precisa vir do gesto do usuário; qualquer await antes disso o invalida.
@@ -162,14 +174,21 @@ export function createBroadcaster({
     });
 
     statsTimer = setInterval(() => {
-      onStats?.({
+      const snapshot = {
         viewers,
         fps: frames,
         mbps: (bytes * 8) / 1e6,
         seconds: Math.floor((Date.now() - startedAt) / 1000),
-      });
+        targetFps: fps,
+        dropped: droppedFrames,
+        adaptiveLevel,
+      };
+      onStats?.(snapshot);
+      evaluatePerformance(snapshot, receivedFrames);
       bytes = 0;
       frames = 0;
+      receivedFrames = 0;
+      droppedFrames = 0;
     }, 1000);
 
     pump(track);
@@ -436,7 +455,6 @@ export function createBroadcaster({
 
     const t0 = performance.now();
     const hasRvfc = typeof video.requestVideoFrameCallback === 'function';
-    const minGap = 1000 / (fps + 2);
     let lastAt = 0;
 
     const schedule = () => {
@@ -454,7 +472,7 @@ export function createBroadcaster({
 
       const now = performance.now();
       // rAF segue o refresh da tela, que pode ser bem acima do fps alvo.
-      if (!hasRvfc && now - lastAt < minGap) return schedule();
+      if (!hasRvfc && now - lastAt < 1000 / (fps + 2)) return schedule();
       lastAt = now;
 
       let frame;
@@ -481,8 +499,10 @@ export function createBroadcaster({
       frame.close();
       return true;
     }
+    receivedFrames++;
     // Backpressure: fila no encoder vira latência que nunca mais sai.
     if (encoder.encodeQueueSize > 2) {
+      droppedFrames++;
       frame.close();
       return true;
     }
@@ -516,6 +536,86 @@ export function createBroadcaster({
   }
 
   /**
+   * Controle de carga sem perguntas nem reinício.
+   *
+   * Três segundos ruins evitam reagir a uma engasgada isolada. A recuperação é
+   * deliberadamente mais lenta (20 s), para não ficar oscilando entre níveis.
+   */
+  function evaluatePerformance(stats, received) {
+    if (!running || viewers === 0 || stats.seconds < 5 || received === 0) return;
+
+    const dropRate = stats.dropped / received;
+    // FPS baixo também pode significar uma tela parada, não sobrecarga. Quadro
+    // descartado por fila cheia é o sinal confiável de que o encoder perdeu o
+    // ritmo, então só ele aciona a redução.
+    const overloaded = dropRate > 0.15;
+    overloadedSeconds = overloaded ? overloadedSeconds + 1 : 0;
+    stableSeconds = !overloaded && dropRate < 0.03 ? stableSeconds + 1 : 0;
+
+    if (overloadedSeconds >= 3 && adaptiveLevel < 3) {
+      adaptiveLevel++;
+      overloadedSeconds = 0;
+      stableSeconds = 0;
+      applyAdaptiveLevel();
+      onPerformance?.(
+        `Desempenho ajustado automaticamente para ${fps} fps. A qualidade volta a subir quando o computador estabilizar.`
+      );
+    } else if (stableSeconds >= 20 && adaptiveLevel > 0) {
+      adaptiveLevel--;
+      overloadedSeconds = 0;
+      stableSeconds = 0;
+      applyAdaptiveLevel();
+      onPerformance?.(`Desempenho estável: qualidade aumentada automaticamente para ${fps} fps.`);
+    }
+  }
+
+  function adaptiveSettings() {
+    const levels = [
+      { fps: requestedFps, scale: 1, bitrate: requestedBitrate },
+      { fps: Math.min(requestedFps, 30), scale: 0.85, bitrate: requestedBitrate * 0.8 },
+      { fps: Math.min(requestedFps, 24), scale: 0.7, bitrate: requestedBitrate * 0.6 },
+      { fps: Math.min(requestedFps, 15), scale: 0.55, bitrate: requestedBitrate * 0.4 },
+    ];
+    const current = levels[adaptiveLevel];
+    return {
+      fps: Math.max(10, Math.round(current.fps)),
+      scale: current.scale,
+      bitrate: Math.max(750_000, Math.round(current.bitrate)),
+    };
+  }
+
+  function targetSize(width, height) {
+    const base = fitWithin(width, height);
+    const { scale } = adaptiveSettings();
+    return { width: even(Math.round(base.width * scale)), height: even(Math.round(base.height * scale)) };
+  }
+
+  function applyAdaptiveLevel() {
+    const next = adaptiveSettings();
+    fps = next.fps;
+    bitrate = next.bitrate;
+
+    if (encoder?.state === 'configured' && srcW && srcH) {
+      const target = targetSize(srcW, srcH);
+      config = { ...config, ...target, bitrate, framerate: fps };
+      encoder.configure(config);
+      configureStage(srcW, srcH, target);
+      wantKeyframe = true;
+      onStatus?.({
+        codec: config.codec,
+        width: config.width,
+        height: config.height,
+        direct: Boolean(window.MediaStreamTrackProcessor),
+      });
+    }
+
+    stream
+      ?.getVideoTracks()[0]
+      ?.applyConstraints({ frameRate: { ideal: fps, max: fps } })
+      .catch(() => {});
+  }
+
+  /**
    * Mantém o encoder casado com o tamanho real da fonte.
    *
    * displayWidth/Height e não codedWidth/Height: o codificado inclui padding de
@@ -528,7 +628,7 @@ export function createBroadcaster({
 
     srcW = sw;
     srcH = sh;
-    const target = fitWithin(sw, sh);
+    const target = targetSize(sw, sh);
 
     if (target.width !== config.width || target.height !== config.height) {
       config = { ...config, ...target };
@@ -542,7 +642,11 @@ export function createBroadcaster({
       });
     }
 
-    // fitWithin preserva a proporção, então reduzir não corta nada.
+    configureStage(sw, sh, target);
+  }
+
+  // targetSize preserva a proporção, então reduzir não corta nada.
+  function configureStage(sw, sh, target) {
     if (target.width === sw && target.height === sh) {
       stage = null;
       stageCtx = null;
@@ -725,23 +829,19 @@ export function createBroadcaster({
 
   /** Ajusta qualidade e taxa de quadros com a transmissão no ar. */
   function setQuality({ bitrate: nextBitrate, fps: nextFps } = {}) {
-    if (nextBitrate) bitrate = nextBitrate;
-    if (nextFps) fps = nextFps;
+    if (nextBitrate) requestedBitrate = nextBitrate;
+    if (nextFps) requestedFps = nextFps;
+    adaptiveLevel = 0;
+    overloadedSeconds = 0;
+    stableSeconds = 0;
+    bitrate = requestedBitrate;
+    fps = requestedFps;
     if (encoder?.state !== 'configured') return;
 
-    config = { ...config, bitrate, framerate: fps };
-    encoder.configure(config);
-    wantKeyframe = true;
-
-    // Pedir a taxa nova à própria captura evita gastar CPU codificando quadros
-    // que seriam descartados adiante.
-    stream
-      ?.getVideoTracks()[0]
-      ?.applyConstraints({ frameRate: { ideal: fps, max: fps } })
-      .catch(() => {});
+    applyAdaptiveLevel();
   }
 
-  const getSettings = () => ({ bitrate, fps });
+  const getSettings = () => ({ bitrate: requestedBitrate, fps: requestedFps, adaptiveLevel });
 
   function cleanup() {
     stream?.getTracks().forEach((t) => t.stop());

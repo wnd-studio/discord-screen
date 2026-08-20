@@ -1793,6 +1793,7 @@ async function broadcastFromHere() {
     fps: Number($('mFps').value),
     audio: $('mAudio').checked,
     onAviso: (m) => toast(m, true),
+    onPerformance: (m) => toast(m),
     onEnd: () => {
       myBroadcast = null;
       renderBar();
