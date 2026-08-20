@@ -118,6 +118,73 @@ body {
   border-radius: 0;
 }
 
+/* Modo imersivo: ocupa cada pixel que o Discord concedeu ao iframe. Quando a
+   Fullscreen API é aceita, essa mesma caixa passa a ocupar o monitor inteiro. */
+#app.immersive .topbar,
+#app.immersive .bottombar,
+#app.immersive .panel,
+#app.immersive .tile-footer,
+#app.immersive .tile-you,
+#app.immersive .tile-stop,
+#app.immersive .tile-volume {
+  display: none !important;
+}
+
+#app.immersive .grid {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: #000;
+}
+
+#app.immersive .tile-palco {
+  place-self: stretch;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto !important;
+  border: 0;
+}
+
+.tile-fullscreen-exit {
+  position: absolute;
+  z-index: 110;
+  right: 14px;
+  top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  opacity: 0.28;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.tile-fullscreen-exit:hover,
+.tile-fullscreen-exit:focus-visible {
+  opacity: 1;
+  background: rgba(30, 31, 34, 0.9);
+}
+
+.tile-fullscreen-exit svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;

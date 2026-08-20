@@ -74,6 +74,7 @@ let volumeAntes = volume || 1;
 // de quem assiste precisa sobreviver a isso.
 let activeSlot = null;
 let telaCheia = false;
+let fullscreenEnteredAt = 0;
 
 // ------------------------------------------------------------------- helpers
 
@@ -207,6 +208,8 @@ function renderGrid() {
   // pelo fechamento do WebSocket mostrava o painel "Ninguém na sala" por cima
   // da lista de salas.
   if (!inRoom()) {
+    telaCheia = false;
+    $('app').classList.remove('immersive');
     grid.hidden = true;
     $('empty').hidden = true;
     $('fullscreen').hidden = true;
@@ -237,10 +240,11 @@ function renderGrid() {
   $('fullscreen').dataset.tip = rotulo;
   $('fullscreen').setAttribute('aria-label', rotulo);
 
-  if (!hasPeople) return;
-
   grid.classList.toggle('palco', noPalco);
   grid.classList.toggle('cheia', noPalco && telaCheia);
+  $('app').classList.toggle('immersive', noPalco && telaCheia);
+
+  if (!hasPeople) return;
 
   // Com a lateral no ar, a contagem no topo repete o que está logo ali — e
   // custa uma faixa inteira de altura, que é o que falta para a tela. Vazia, a
@@ -353,9 +357,9 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
   }
 
   const aoClicar = () => {
-    if (palco) telaCheia = !telaCheia;
+    if (palco) toggleFullscreen();
     else activeSlot = slot;
-    renderGrid();
+    if (!palco) renderGrid();
   };
 
   if (stream) {
@@ -406,12 +410,27 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
       });
       tile.append(streamVolume);
     }
+
   } else if (slot !== null) {
     // O convite tem botão próprio, que para o clique antes de chegar no tile.
     if (!palco) tile.addEventListener('click', aoClicar);
     tile.append(buildWatchPrompt(slot, p.name, isMe));
   } else {
     tile.append(buildAvatar(p));
+  }
+
+  if (palco && telaCheia) {
+    const exit = document.createElement('button');
+    exit.className = 'tile-fullscreen-exit';
+    exit.dataset.tip = 'Sair da tela cheia';
+    exit.setAttribute('aria-label', 'Sair da tela cheia');
+    exit.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+    exit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setFullscreen(false);
+    });
+    tile.append(exit);
   }
 
   const footer = document.createElement('div');
@@ -2001,12 +2020,56 @@ $('settings').addEventListener('click', () => {
   $('settings').classList.toggle('on', !panel.hidden);
 });
 
-// O estado visual do botão é decidido por renderGrid, que é quem sabe se há
-// tela no palco — aqui só se troca a intenção.
-$('fullscreen').addEventListener('click', () => {
-  if (activeSlot === null) return;
-  telaCheia = !telaCheia;
+/**
+ * Usa a Fullscreen API quando o host permite e sempre mantém um fallback
+ * imersivo dentro do iframe. O Discord controla o iframe, portanto negar a API
+ * não pode fazer o botão parecer quebrado.
+ */
+async function setFullscreen(active) {
+  if (active && activeSlot === null) return;
+
+  telaCheia = active;
   renderGrid();
+
+  if (active && !document.fullscreenElement) {
+    try {
+      if (!document.fullscreenEnabled) throw new Error('fullscreen indisponível');
+      await $('app').requestFullscreen({ navigationUI: 'hide' });
+    } catch {
+      if (inDiscord) {
+        toast('Modo imersivo ativado. Para ocupar também a janela do Discord, use Expandir no canto inferior direito.');
+      }
+    }
+  } else if (!active && document.fullscreenElement) {
+    try {
+      await document.exitFullscreen();
+    } catch {}
+  }
+}
+
+const toggleFullscreen = () => setFullscreen(!telaCheia);
+
+$('fullscreen').addEventListener('click', toggleFullscreen);
+
+document.addEventListener('fullscreenchange', () => {
+  const active = Boolean(document.fullscreenElement);
+  if (active) {
+    fullscreenEnteredAt = Date.now();
+    return;
+  }
+  // Escape encerra a Fullscreen API antes de o keydown chegar à página.
+  if (!active && telaCheia) {
+    // Alguns hosts aceitam a promessa e cancelam a tela cheia logo em seguida.
+    // Isso é bloqueio, não intenção de saída: preserva o fallback imersivo.
+    if (fullscreenEnteredAt && Date.now() - fullscreenEnteredAt < 1500) {
+      fullscreenEnteredAt = 0;
+      renderGrid();
+      return;
+    }
+    telaCheia = false;
+    fullscreenEnteredAt = 0;
+    renderGrid();
+  }
 });
 
 window.addEventListener('keydown', (e) => {
@@ -2022,8 +2085,7 @@ window.addEventListener('keydown', (e) => {
 
   // Esc sai da tela cheia — é o reflexo de todo mundo.
   if (telaCheia) {
-    telaCheia = false;
-    renderGrid();
+    setFullscreen(false);
   }
 });
 
