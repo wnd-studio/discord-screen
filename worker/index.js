@@ -755,12 +755,16 @@ async function oauth(request, env, url) {
       headers: { authorization: `Bearer ${token.access_token}` },
     }).then((response) => response.ok ? response.json() : []).catch(() => []);
     const manageableGuilds = guilds.filter((guild) => {
+      if (guild?.owner === true) return true;
       try {
         const permissions = BigInt(guild?.permissions || '0');
         return Boolean(permissions & 8n) || Boolean(permissions & 32n);
       } catch { return false; }
     });
     const botGuildsResult = await discordBot(env, '/users/@me/guilds');
+    if (!botGuildsResult.ok) {
+      return Response.redirect(`${origin}/changelog/setup?erro=bot_invalido`, 302);
+    }
     const botGuildIds = new Set(
       Array.isArray(botGuildsResult.data) ? botGuildsResult.data.map((guild) => String(guild.id)) : []
     );

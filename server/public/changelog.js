@@ -4,6 +4,7 @@ const setupToken = query.get('s');
 
 const errors = {
   bot_nao_configurado: 'O proprietário ainda precisa ativar o bot no aplicativo.',
+  bot_invalido: 'O token do bot foi recusado pelo Discord. O proprietário precisa gerar e cadastrar um novo token.',
   estado_invalido: 'A autorização perdeu a validade. Inicie novamente.',
   sem_permissao: 'Somente alguém com permissão para administrar o servidor pode concluir esta configuração.',
   sem_codigo: 'A autorização foi cancelada antes de terminar.',
