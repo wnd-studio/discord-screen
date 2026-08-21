@@ -120,6 +120,11 @@ export function createPlayer(canvas, { onError, onTamanho } = {}) {
     }
     decoder = null;
     needKeyframe = true;
+    // start() reutiliza este mesmo player depois do modo de áudio em segundo
+    // plano. A primeira imagem da nova sessão precisa avisar a interface mesmo
+    // quando a resolução não mudou; sem isso o vídeo volta a ser desenhado,
+    // mas o overlay permanece eternamente em "Conectando…".
+    virgem = true;
     lastLagMs = 0;
     if (canvas.width && canvas.height) {
       ctx.fillStyle = '#000';
