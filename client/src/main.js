@@ -1716,8 +1716,9 @@ function openModal(mode) {
   $('modalSom').hidden = !live || !myBroadcast;
   if (live && myBroadcast) {
     $('modalSom').textContent = myBroadcast.temSom()
-      ? 'Trocar a aba do som'
-      : 'Som de uma aba';
+      ? 'Trocar fonte do áudio'
+      : 'Escolher fonte do áudio';
+    $('mCamera').checked = myBroadcast.temCamera();
 
     const s = myBroadcast.getSettings();
     $('mQuality').value = String(s.bitrate);
@@ -1767,13 +1768,13 @@ $('modalSwap').addEventListener('click', async () => {
   }
 });
 
-// A saída para quem quer tela inteira COM som: o vídeo continua o mesmo e o som
-// passa a vir de uma aba, que é a única fonte isolada do Discord.
+// Troca a fonte sonora sem interromper o vídeo. Janela isolada é preferida
+// quando existe; aba continua sendo o caminho mais compatível.
 $('modalSom').addEventListener('click', async () => {
   if (!myBroadcast) return;
   try {
     await myBroadcast.trocarSom();
-    toast('Som ligado, vindo da aba escolhida.');
+    toast('Fonte do áudio atualizada.');
     closeModal();
     renderBar();
   } catch (err) {
@@ -1811,8 +1812,10 @@ async function broadcastFromHere() {
     bitrate: Number($('mQuality').value),
     fps: Number($('mFps').value),
     audio: $('mAudio').checked,
+    camera: $('mCamera').checked,
     onAviso: (m) => toast(m, true),
     onPerformance: (m) => toast(m),
+    onCameraStatus: () => renderBar(),
     onEnd: () => {
       myBroadcast = null;
       renderBar();
@@ -1846,6 +1849,13 @@ $('modal').addEventListener('click', (e) => {
 $('modalGo').addEventListener('click', async () => {
   // Ajuste no ar: aplica e fecha, sem tocar na captura.
   if (modalMode === 'live') {
+    try {
+      const wantsCamera = $('mCamera').checked;
+      if (wantsCamera && !myBroadcast?.temCamera()) await myBroadcast?.ligarCamera();
+      if (!wantsCamera && myBroadcast?.temCamera()) myBroadcast.desligarCamera();
+    } catch (err) {
+      toast(`Não foi possível ligar a câmera: ${err.message}`, true);
+    }
     myBroadcast?.setQuality({
       bitrate: Number($('mQuality').value),
       fps: Number($('mFps').value),
@@ -1867,6 +1877,7 @@ $('modalGo').addEventListener('click', async () => {
   url.searchParams.set('q', $('mQuality').value);
   url.searchParams.set('fps', $('mFps').value);
   url.searchParams.set('som', $('mAudio').checked ? '1' : '0');
+  url.searchParams.set('cam', $('mCamera').checked ? '1' : '0');
 
   if (inDiscord) {
     try {

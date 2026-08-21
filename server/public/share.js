@@ -67,12 +67,17 @@ function applyPresets() {
   const q = query.get('q');
   const fps = query.get('fps');
   const som = query.get('som');
+  const cam = query.get('cam');
 
   // A opção de som veio decidida da atividade, então a caixa some junto com os
   // seletores — repetir a mesma escolha aqui só confundiria.
   if (som !== null) {
     $('withAudio').checked = som === '1';
     document.querySelector('.check').hidden = true;
+  }
+  if (cam !== null) {
+    $('withCamera').checked = cam === '1';
+    $('withCamera').closest('.check').hidden = true;
   }
 
   if (!q && !fps) return;
@@ -84,7 +89,8 @@ function applyPresets() {
 
   const mbps = (Number($('quality').value) / 1e6).toFixed(1).replace('.', ',');
   const comSom = $('withAudio').checked ? ' · com som' : '';
-  $('presetLine').textContent = `${mbps} Mb/s · ${$('fps').value} fps${comSom}`;
+  const comCamera = $('withCamera').checked ? ' · com câmera' : '';
+  $('presetLine').textContent = `${mbps} Mb/s · ${$('fps').value} fps${comSom}${comCamera}`;
   $('presetLine').hidden = false;
 }
 
@@ -101,6 +107,7 @@ async function start() {
     bitrate: Number($('quality').value),
     fps: Number($('fps').value),
     audio: $('withAudio').checked,
+    camera: $('withCamera').checked,
     onStatus: (s) =>
       setStatus(
         `Codec: ${s.codec} · ${s.width}×${s.height} · captura ${s.direct ? 'direta' : 'via <video>'}`
@@ -123,14 +130,31 @@ async function start() {
       badge.classList.toggle('off', !active);
       badge.classList.toggle('on', active);
       badge.textContent = active
-        ? source === 'tab' ? 'Áudio da aba ativo' : 'Áudio do sistema ativo'
+        ? source === 'tab'
+          ? 'Áudio da aba ativo'
+          : source === 'window'
+            ? 'Áudio da janela ativo'
+            : 'Áudio do sistema ativo'
         : 'Sem áudio';
       // Mesmo sem áudio inicial, a pessoa consegue corrigir sem reiniciar vídeo.
       $('somAba').hidden = active && source === 'tab';
     },
+    onCameraStatus: ({ active }) => {
+      const badge = $('cameraBadge');
+      const cameraPreview = $('cameraPreview');
+      badge.classList.toggle('off', !active);
+      badge.classList.toggle('on', active);
+      badge.textContent = active ? 'Câmera ativa' : 'Sem câmera';
+      $('cameraToggle').textContent = active ? 'Desligar câmera' : 'Ligar câmera';
+      cameraPreview.hidden = !active;
+      cameraPreview.srcObject = active ? broadcaster?.getCameraStream() ?? null : null;
+      if (active) cameraPreview.play().catch(() => {});
+    },
     onEnd: (reason) => {
       broadcaster = null;
       $('preview').srcObject = null;
+      $('cameraPreview').srcObject = null;
+      $('cameraPreview').hidden = true;
       $('live').hidden = true;
       $('setup').hidden = false;
       $('start').disabled = false;
@@ -154,16 +178,26 @@ async function start() {
   }
 }
 
-// Mantém o vídeo como está e troca só de onde vem o som — a única fonte que
-// não carrega o Discord junto é uma aba.
+// Mantém o vídeo como está e troca só de onde vem o som. Janela isolada é
+// preferida quando o navegador oferece; aba é o fallback mais compatível.
 $('somAba').addEventListener('click', async () => {
   if (!broadcaster) return;
   try {
     await broadcaster.trocarSom();
-    setStatus('Som ligado, vindo da aba escolhida.', 'ok');
+    setStatus('Fonte do áudio atualizada.', 'ok');
     $('somAba').textContent = 'Trocar fonte do áudio';
   } catch (err) {
     if (err.name !== 'NotAllowedError') setStatus(err.message, 'error');
+  }
+});
+
+$('cameraToggle').addEventListener('click', async () => {
+  if (!broadcaster) return;
+  try {
+    if (broadcaster.temCamera()) broadcaster.desligarCamera();
+    else await broadcaster.ligarCamera();
+  } catch (err) {
+    setStatus(`Não foi possível ligar a câmera: ${err.message}`, 'error');
   }
 });
 

@@ -67,12 +67,14 @@ export function supportError({ requireChromium = false } = {}) {
  * @param {number} opts.bitrate      bits por segundo
  * @param {number} opts.fps
  * @param {boolean} [opts.audio]     capturar também o som do computador
+ * @param {boolean} [opts.camera]    mostrar a câmera sobre a tela
  * @param {(info:object)=>void} [opts.onStatus]  codec/resolução/caminho de captura
  * @param {(stats:object)=>void} [opts.onStats]  viewers, fps, mbps, segundos no ar
  * @param {(reason:string)=>void} [opts.onEnd]   encerrou (por qualquer motivo)
  * @param {(msg:string)=>void} [opts.onAviso]    algo mudou sem ser erro
  * @param {(msg:string)=>void} [opts.onPerformance] ajuste automático de carga
  * @param {(info:object)=>void} [opts.onAudioStatus] estado da captura de som
+ * @param {(info:object)=>void} [opts.onCameraStatus] estado da câmera
  * @param {(msg:string)=>void} [opts.onError]
  */
 export function createBroadcaster({
@@ -80,6 +82,7 @@ export function createBroadcaster({
   bitrate,
   fps,
   audio = false,
+  camera = false,
   onStatus,
   onStats,
   onEnd,
@@ -87,6 +90,7 @@ export function createBroadcaster({
   onAviso,
   onPerformance,
   onAudioStatus,
+  onCameraStatus,
 }) {
   let ws = null;
   let stream = null;
@@ -94,6 +98,8 @@ export function createBroadcaster({
   let reader = null;
   let audioEncoder = null;
   let audioReader = null;
+  let cameraStream = null;
+  let cameraVideo = null;
   // Pediram som, mas a superfície escolhida traria o Discord junto. Guardado
   // para a interface poder oferecer a saída em vez de só avisar e esquecer.
   let somBloqueado = false;
@@ -131,7 +137,7 @@ export function createBroadcaster({
       audio: audio ? audioConstraints() : false,
       // Estes são hints de DisplayMediaStreamOptions (nível superior), não
       // restrições da faixa de áudio. Dentro de `audio` o Chromium os ignorava.
-      ...(audio ? { systemAudio: 'include', windowAudio: 'system' } : {}),
+      ...(audio ? { systemAudio: 'include', windowAudio: 'window' } : {}),
     });
 
     const track = stream.getVideoTracks()[0];
@@ -142,6 +148,12 @@ export function createBroadcaster({
 
     const s = track.getSettings();
     const target = fitWithin(s.width ?? 1280, s.height ?? 720);
+
+    if (camera) {
+      await ligarCamera().catch((err) => {
+        onAviso?.(`A tela será transmitida sem câmera: ${cameraError(err)}`);
+      });
+    }
 
     config = await pickConfig(target.width, target.height);
     if (!config) {
@@ -196,7 +208,8 @@ export function createBroadcaster({
     // o som" fica desmarcada, e o navegador devolve a tela sem faixa de som.
     const audioTrack = prepararSom(track, stream);
     if (audioTrack) {
-      const source = track.getSettings?.().displaySurface === 'browser' ? 'tab' : 'system';
+      const surface = track.getSettings?.().displaySurface;
+      const source = surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
       pumpAudio(audioTrack, source);
     }
     else if (audio) {
@@ -255,7 +268,11 @@ export function createBroadcaster({
 
     const superficie = videoTrack.getSettings?.().displaySurface;
     somBloqueado = false;
-    if (superficie !== 'browser') {
+    if (superficie === 'window') {
+      onAviso?.(
+        'Áudio da janela solicitado. A separação funciona apenas quando o navegador e o aplicativo selecionado oferecem essa opção.'
+      );
+    } else if (superficie !== 'browser') {
       onAviso?.(
         'Áudio do sistema ativo. Ele pode incluir a voz do Discord; se houver eco, use “Trocar fonte do áudio” e escolha uma aba.'
       );
@@ -277,7 +294,7 @@ export function createBroadcaster({
       video: true,
       audio: audioConstraints(),
       systemAudio: 'include',
-      windowAudio: 'system',
+      windowAudio: 'window',
     });
 
     const faixa = escolha.getAudioTracks()[0];
@@ -289,14 +306,7 @@ export function createBroadcaster({
     if (!faixa) {
       escolha.getTracks().forEach((t) => t.stop());
       throw new Error(
-        'Essa escolha veio sem som. Escolha uma aba e marque "Compartilhar o áudio da guia".'
-      );
-    }
-
-    if (superficie !== 'browser') {
-      faixa.stop();
-      throw new Error(
-        'Só aba tem som isolado. Tela inteira traria o Discord junto e a call se ouviria.'
+        'Essa escolha veio sem som. Tente uma janela que ofereça áudio ou escolha uma aba e marque “Compartilhar áudio”.'
       );
     }
 
@@ -312,9 +322,76 @@ export function createBroadcaster({
     audioEncoder = null;
 
     somBloqueado = false;
-    faixa.addEventListener('ended', () => onAviso?.('A aba do som foi fechada.'));
-    pumpAudio(faixa, 'tab');
+    const source = superficie === 'browser' ? 'tab' : superficie === 'window' ? 'window' : 'system';
+    faixa.addEventListener('ended', () => onAviso?.('A fonte do áudio foi encerrada.'));
+    if (source !== 'tab') {
+      onAviso?.('Áudio do aplicativo/sistema ativo. Se a voz do Discord voltar em eco, escolha uma janela compatível ou uma aba.');
+    }
+    pumpAudio(faixa, source);
     return faixa;
+  }
+
+  // ------------------------------------------------------------------- câmera
+
+  function cameraError(err) {
+    if (err?.name === 'NotAllowedError') return 'a permissão foi recusada';
+    if (err?.name === 'NotFoundError') return 'nenhuma câmera foi encontrada';
+    if (err?.name === 'NotReadableError') return 'a câmera está sendo usada por outro programa';
+    return err?.message || 'não foi possível abrir a câmera';
+  }
+
+  async function ligarCamera() {
+    if (cameraStream) return cameraStream;
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Este navegador não permite usar a câmera.');
+
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30, max: 30 } },
+        audio: false,
+      });
+      cameraVideo = document.createElement('video');
+      cameraVideo.muted = true;
+      cameraVideo.playsInline = true;
+      cameraVideo.srcObject = cameraStream;
+      Object.assign(cameraVideo.style, {
+        position: 'fixed',
+        left: '-9999px',
+        width: '2px',
+        height: '2px',
+        opacity: '0',
+      });
+      document.body.append(cameraVideo);
+      await cameraVideo.play();
+      camera = true;
+      cameraStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        desligarCamera();
+        onAviso?.('A câmera foi desligada pelo navegador.');
+      }, { once: true });
+      if (srcW && srcH) configureStage(srcW, srcH, targetSize(srcW, srcH));
+      wantKeyframe = true;
+      onCameraStatus?.({ active: true });
+      return cameraStream;
+    } catch (err) {
+      cameraStream?.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+      cameraVideo?.remove();
+      cameraVideo = null;
+      camera = false;
+      onCameraStatus?.({ active: false });
+      throw err;
+    }
+  }
+
+  function desligarCamera() {
+    const wasActive = Boolean(cameraStream);
+    cameraStream?.getTracks().forEach((track) => track.stop());
+    cameraStream = null;
+    cameraVideo?.remove();
+    cameraVideo = null;
+    camera = false;
+    if (srcW && srcH) configureStage(srcW, srcH, targetSize(srcW, srcH));
+    wantKeyframe = true;
+    if (wasActive) onCameraStatus?.({ active: false });
   }
 
   // -------------------------------------------------------------------- áudio
@@ -516,6 +593,7 @@ export function createBroadcaster({
     let out = frame;
     if (stage) {
       stageCtx.drawImage(frame, 0, 0, stage.width, stage.height);
+      drawCamera();
       frame.close();
       out = new VideoFrame(stage, { timestamp });
     }
@@ -533,6 +611,37 @@ export function createBroadcaster({
     out.close();
     frames++;
     return true;
+  }
+
+  function drawCamera() {
+    if (!cameraVideo || cameraVideo.readyState < 2 || !stageCtx) return;
+    const margin = Math.max(12, Math.round(stage.width * 0.012));
+    const width = Math.min(Math.round(stage.width * 0.24), 360);
+    const ratio = cameraVideo.videoWidth && cameraVideo.videoHeight
+      ? cameraVideo.videoWidth / cameraVideo.videoHeight
+      : 16 / 9;
+    const height = Math.round(width / ratio);
+    const x = stage.width - width - margin;
+    const y = stage.height - height - margin;
+    const radius = Math.max(8, Math.round(width * 0.04));
+
+    stageCtx.save();
+    stageCtx.beginPath();
+    stageCtx.roundRect(x, y, width, height, radius);
+    stageCtx.clip();
+    // Espelho apenas na câmera; a tela permanece exatamente como foi capturada.
+    stageCtx.translate(x + width, y);
+    stageCtx.scale(-1, 1);
+    stageCtx.drawImage(cameraVideo, 0, 0, width, height);
+    stageCtx.restore();
+
+    stageCtx.save();
+    stageCtx.strokeStyle = 'rgba(255,255,255,.8)';
+    stageCtx.lineWidth = Math.max(2, Math.round(width * 0.008));
+    stageCtx.beginPath();
+    stageCtx.roundRect(x, y, width, height, radius);
+    stageCtx.stroke();
+    stageCtx.restore();
   }
 
   /**
@@ -647,7 +756,7 @@ export function createBroadcaster({
 
   // targetSize preserva a proporção, então reduzir não corta nada.
   function configureStage(sw, sh, target) {
-    if (target.width === sw && target.height === sh) {
+    if (target.width === sw && target.height === sh && !camera) {
       stage = null;
       stageCtx = null;
     } else {
@@ -777,7 +886,7 @@ export function createBroadcaster({
     const fresh = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: { ideal: fps, max: fps } },
       audio: audio ? audioConstraints() : false,
-      ...(audio ? { systemAudio: 'include', windowAudio: 'system' } : {}),
+      ...(audio ? { systemAudio: 'include', windowAudio: 'window' } : {}),
     });
 
     const previous = stream;
@@ -848,6 +957,11 @@ export function createBroadcaster({
     stream = null;
     video?.remove();
     video = null;
+    // Antes de zerar o palco: desligarCamera pode reconstruí-lo para remover a
+    // sobreposição quando a transmissão ainda está viva.
+    srcW = 0;
+    srcH = 0;
+    desligarCamera();
     stage = null;
     stageCtx = null;
   }
@@ -889,9 +1003,13 @@ export function createBroadcaster({
     stop,
     changeScreen,
     trocarSom,
+    ligarCamera,
+    desligarCamera,
     setQuality,
     getSettings,
     temSom: () => Boolean(audioEncoder),
+    temCamera: () => Boolean(cameraStream),
+    getCameraStream: () => cameraStream,
     somBloqueado: () => somBloqueado,
     isRunning: () => running,
   };

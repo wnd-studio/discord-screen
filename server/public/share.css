@@ -159,6 +159,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .audio-badge {
@@ -193,13 +194,31 @@ button:disabled {
   }
 }
 
-video {
+.preview-wrap {
+  position: relative;
+}
+
+.preview-wrap > #preview {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
   border-radius: 8px;
   border: 1px solid var(--line);
   object-fit: contain;
+}
+
+.camera-preview {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: min(24%, 220px);
+  aspect-ratio: 16 / 9;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 10px;
+  background: #111;
+  object-fit: cover;
+  transform: scaleX(-1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
 .preset {

@@ -48,10 +48,15 @@
           <span>Incluir áudio na transmissão</span>
         </label>
 
+        <label class="check">
+          <input id="withCamera" type="checkbox" />
+          <span>Mostrar minha câmera no canto</span>
+        </label>
+
         <p class="note">
           Na janela que abrir, marque também <strong>“Compartilhar áudio”</strong>. O som de
-          uma aba é a opção mais confiável; o som da tela inteira depende do navegador e
-          pode incluir a voz do Discord.
+          uma aba é a opção mais confiável. Em Chrome/Edge atualizado, algumas janelas
+          também oferecem áudio isolado. A disponibilidade depende do aplicativo escolhido.
         </p>
 
         <button id="start" class="primary">Escolher tela e transmitir</button>
@@ -61,8 +66,12 @@
         <div class="live-head">
           <div class="live-badge"><span class="dot"></span> No ar</div>
           <div id="audioBadge" class="audio-badge off">Sem áudio</div>
+          <div id="cameraBadge" class="audio-badge off">Sem câmera</div>
         </div>
-        <video id="preview" muted playsinline></video>
+        <div class="preview-wrap">
+          <video id="preview" muted playsinline></video>
+          <video id="cameraPreview" class="camera-preview" muted playsinline hidden></video>
+        </div>
         <div class="stats">
           <div><strong id="viewers">0</strong><span>assistindo</span></div>
           <div><strong id="fpsOut">—</strong><span>quadros</span></div>
@@ -70,6 +79,7 @@
           <div><strong id="elapsed">00:00</strong><span>no ar</span></div>
         </div>
         <button id="somAba" class="secondary" hidden>Trocar fonte do áudio</button>
+        <button id="cameraToggle" class="secondary">Ligar câmera</button>
         <button id="stop" class="danger">Parar de transmitir</button>
       </section>
 
@@ -80,6 +90,6 @@
       </footer>
     </main>
 
-    <script type="module" src="/share.js?v=11"></script>
+    <script type="module" src="/share.js?v=12"></script>
   </body>
 </html>
