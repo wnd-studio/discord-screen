@@ -662,7 +662,7 @@ async function oauth(request, env, url) {
     target.searchParams.set('permissions', String(DISCORD_MESSAGE_PERMISSIONS));
     target.searchParams.set('state', state);
     target.searchParams.set('integration_type', '0');
-    const response = Response.redirect(target, 302);
+    const response = new Response(null, { status: 302, headers: { location: target.toString() } });
     response.headers.append(
       'set-cookie',
       `${INSTALL_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax`
@@ -746,7 +746,10 @@ async function oauth(request, env, url) {
       env.SESSION_SECRET,
       CHANGELOG_SETUP_TTL
     );
-    const response = Response.redirect(`${origin}/changelog/setup?s=${encodeURIComponent(setup)}`, 302);
+    const response = new Response(null, {
+      status: 302,
+      headers: { location: `${origin}/changelog/setup?s=${encodeURIComponent(setup)}` },
+    });
     response.headers.append(
       'set-cookie',
       `${INSTALL_STATE_COOKIE}=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax`
