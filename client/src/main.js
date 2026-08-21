@@ -79,7 +79,7 @@ let fullscreenEnteredAt = 0;
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.6';
+const NEWS_VERSION = '0.7';
 
 // ------------------------------------------------------------------- helpers
 

@@ -71,6 +71,14 @@ button, a { font: inherit; }
 .panel-head { margin-bottom: 16px; }
 .panel h2 { font-size: 18px; }
 .panel-note { font-size: 12px; text-align: right; }
+.changelog-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+.changelog-layout { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(320px,1.15fr); gap:22px; }
+.changelog-form { display:flex; flex-direction:column; gap:11px; }
+.changelog-form label { color:var(--muted); font-size:11px; font-weight:650; }
+.changelog-form input,.changelog-form textarea { display:block; width:100%; margin-top:5px; padding:10px 11px; border:1px solid var(--line); border-radius:8px; background:#111217; color:var(--text); font:inherit; font-size:13px; line-height:1.45; resize:vertical; }
+.changelog-form input:focus,.changelog-form textarea:focus { outline:none; border-color:var(--accent); }
+.subheading { margin:0 0 9px; font-size:12px; }
+.history-heading { margin-top:18px; }
 .live-dot { color: var(--green); font-size: 12px; }
 .live-dot::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(50,196,119,.12); }
 
@@ -137,4 +145,6 @@ footer { margin-top: 26px; color: #757985; font-size: 11px; }
   .chart { gap: 3px; }
   .bar-day { display: none; }
   .room-grid { grid-template-columns: 1fr; }
+  .changelog-layout { grid-template-columns:1fr; }
+  .changelog-head-actions { width:100%; justify-content:flex-start; flex-wrap:wrap; }
 }

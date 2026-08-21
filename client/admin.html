@@ -55,6 +55,34 @@
 
       <section id="stats" class="stats" aria-label="Resumo"></section>
 
+      <section class="panel changelog-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Comunicação</p>
+            <h2>Changelogs no Discord</h2>
+          </div>
+          <div class="changelog-head-actions">
+            <span id="changelogStatus" class="panel-note"></span>
+            <a id="installBot" class="button secondary" href="/changelog/install" target="_blank" rel="noopener">Adicionar ao servidor</a>
+          </div>
+        </div>
+        <div class="changelog-layout">
+          <form id="changelogForm" class="changelog-form">
+            <label>Versão <input id="changelogVersion" maxlength="24" placeholder="0.7" /></label>
+            <label>Título <input id="changelogTitle" maxlength="120" placeholder="Novidades do Discord Screen" required /></label>
+            <label>Resumo <textarea id="changelogSummary" maxlength="500" rows="3" placeholder="Uma apresentação curta da atualização"></textarea></label>
+            <label>Detalhes <textarea id="changelogDetails" maxlength="3500" rows="7" placeholder="• Melhoria 1&#10;• Correção 2"></textarea></label>
+            <button id="publishChangelog" class="button primary" type="submit">Publicar nos canais configurados</button>
+          </form>
+          <div>
+            <h3 class="subheading">Canais cadastrados</h3>
+            <div id="changelogChannels" class="stack"></div>
+            <h3 class="subheading history-heading">Últimos envios</h3>
+            <div id="changelogHistory" class="stack"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel chart-panel">
         <div class="panel-head">
           <div>

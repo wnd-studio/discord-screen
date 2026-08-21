@@ -860,6 +860,7 @@ button {
   color: var(--text);
   font: 500 14px/1 inherit;
   transition: background 0.15s, color 0.15s;
+  text-decoration: none;
 }
 
 .btn svg {

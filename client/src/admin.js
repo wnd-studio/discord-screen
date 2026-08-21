@@ -251,7 +251,39 @@ const actionLabels = {
   'block-guild': 'Bloqueou um servidor',
   unblock: 'Removeu um bloqueio',
   maintenance: 'Alterou o modo de manutenção',
+  'publish-changelog': 'Publicou um changelog',
 };
+
+function renderChangelog(changelog = {}, botConfigured, installUrl) {
+  const channels = changelog.channels || [];
+  const enabled = channels.filter((item) => item.enabled);
+  $('#changelogStatus').textContent = botConfigured
+    ? `${number(enabled.length)} canal(is) ativo(s)`
+    : 'Bot ainda não configurado';
+  $('#publishChangelog').disabled = !botConfigured || !enabled.length;
+  $('#installBot').href = installUrl || '/changelog/install';
+
+  $('#changelogChannels').replaceChildren(...(channels.length ? channels.map((channel) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', `${channel.guildName || channel.guildId} · #${channel.channelName || channel.channelId}`));
+    main.append(el('span', '', channel.enabled
+      ? `ativo${channel.lastSentAt ? ` · último envio ${date(channel.lastSentAt)}` : ''}`
+      : `desativado${channel.lastError ? ` · ${channel.lastError}` : ''}`));
+    row.append(main, el('span', `badge ${channel.enabled ? 'installed' : ''}`, channel.enabled ? 'Ativo' : 'Inativo'));
+    return row;
+  }) : [empty('Nenhum servidor escolheu um canal ainda.')]));
+
+  const history = changelog.history || [];
+  $('#changelogHistory').replaceChildren(...(history.length ? history.map((publication) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', `${publication.version ? `v${publication.version} · ` : ''}${publication.title}`));
+    main.append(el('span', '', `${publication.successCount} enviado(s) · ${publication.failureCount} falha(s) · ${date(publication.createdAt)}`));
+    row.append(main);
+    return row;
+  }) : [empty('Nenhum changelog publicado pelo painel.')]));
+}
 
 function renderAudit(audit) {
   const rows = audit.map((entry) => {
@@ -276,6 +308,7 @@ async function loadOverview(silent = false) {
     renderServers(data.servers || []);
     renderBlocks(data.blocks || []);
     renderAudit(data.audit || []);
+    renderChangelog(data.changelog, data.botConfigured, data.installUrl);
     $('#updatedAt').textContent = `Atualizado ${date(data.generatedAt)}`;
     $('#maintenanceBanner').hidden = !data.maintenance;
     $('#enableMaintenance').hidden = Boolean(data.maintenance);
@@ -324,5 +357,28 @@ $('#disableMaintenance').onclick = () => action(
   { action: 'maintenance', enabled: false },
   'Reabrir o aplicativo para todos?'
 );
+
+$('#changelogForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const title = $('#changelogTitle').value.trim();
+  const summary = $('#changelogSummary').value.trim();
+  const details = $('#changelogDetails').value.trim();
+  if (!title || (!summary && !details)) return showToast('Preencha o título e a descrição.', true);
+  const targets = $('#changelogStatus').textContent;
+  if (!confirm(`Publicar “${title}” agora para ${targets}?`)) return;
+  const button = $('#publishChangelog');
+  button.disabled = true;
+  try {
+    const result = await post('/api/admin/changelog/publish', {
+      version: $('#changelogVersion').value.trim(), title, summary, details,
+    });
+    showToast(`${result.successCount} envio(s) concluído(s)${result.failureCount ? ` · ${result.failureCount} falha(s)` : ''}.`, Boolean(result.failureCount));
+    $('#changelogForm').reset();
+    await loadOverview(true);
+  } catch (problem) {
+    showToast(problem.message, true);
+    button.disabled = false;
+  }
+});
 
 start();

@@ -2,11 +2,11 @@
 # .production.vars é ignorado pelo Git e nunca deve ser enviado ao repositório.
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
+DISCORD_BOT_TOKEN=
 SESSION_SECRET=
 PUBLIC_ORIGIN=https://discord-screen.SEUSUBDOMINIO.workers.dev
 
 # Opcionais: proprietário/equipe são detectados automaticamente.
 ADMIN_DISCORD_IDS=
 DISCORD_PUBLIC_KEY=
-DISCORD_BOT_TOKEN=
 

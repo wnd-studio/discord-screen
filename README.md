@@ -14,11 +14,11 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.4.0-22C55E?style=flat-square" alt="Versão 0.4.0">
+    <img src="https://img.shields.io/badge/versao-0.7.0-22C55E?style=flat-square" alt="Versão 0.7.0">
   </p>
 
   <p>
-    <a href="https://discord.com/oauth2/authorize?client_id=1539449081527803925">
+    <a href="https://discord-screen.wendellsilvaa012.workers.dev/changelog/install">
       <img src="https://img.shields.io/badge/Instalar_no_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Instalar no Discord">
     </a>
     <a href="https://discord-screen.wendellsilvaa012.workers.dev">
@@ -109,8 +109,9 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Histórico de uso por servidor | ✅ Retenção operacional de 90 dias |
 | Encerramento e bloqueios administrativos | ✅ Usuário, servidor ou sala |
 | Eventos de autorização do Discord | ✅ Webhook assinado |
+| Changelogs enviados pelo bot | ✅ Canal escolhido em página, sem comandos |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
-| Áudio de abas do navegador | ✅ Opus |
+| Áudio de abas, sistema ou janelas compatíveis | ✅ Opus; disponibilidade depende do navegador e da fonte |
 | Múltiplos transmissores | ✅ Até 4 por sala |
 | Espectadores | ✅ Limite de segurança de 50 por sala |
 | Gravação da transmissão | ❌ Não realizada |
@@ -127,8 +128,8 @@ o Discord inclui esses dados na resposta da aplicação.
 
 O painel mostra salas ativas, participantes, transmissões, servidores onde a Atividade foi usada,
 histórico de 90 dias e ações administrativas. É possível encerrar salas, desconectar ou bloquear
-usuários, bloquear servidores e ativar o modo de manutenção. Nenhuma imagem ou áudio da transmissão
-é exibido ou armazenado no painel.
+usuários, bloquear servidores, ativar o modo de manutenção e publicar changelogs nos canais escolhidos
+pelos administradores dos servidores. Nenhuma imagem ou áudio da transmissão é exibido ou armazenado no painel.
 
 ## Arquitetura
 
@@ -176,11 +177,11 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 ## Limitações atuais
 
 - A transmissão deve ser iniciada por um computador. A captura de tela no celular ainda depende das limitações dos navegadores e do sistema operacional.
-- O áudio deve vir de uma aba do navegador. A captura de áudio do sistema inteiro é bloqueada para evitar eco da chamada do Discord.
+- A captura de áudio depende do navegador, do sistema operacional e da fonte escolhida. Abas costumam oferecer o suporte mais confiável; algumas janelas não disponibilizam áudio ao navegador.
 - A transmissão utiliza relay WebSocket, e não uma infraestrutura WebRTC/SFU. Cada espectador aumenta o tráfego de saída da sala.
 - O plano gratuito da Cloudflare possui cotas diárias. O aplicativo pode ficar publicado continuamente, mas transmissões intensas ou várias salas ativas por muitas horas podem consumir a cota.
 - Captura e reprodução dependem do suporte a WebCodecs. Navegadores incompatíveis podem não conseguir transmitir ou assistir.
-- Uma interrupção na conexão do transmissor pode exigir que o compartilhamento seja iniciado novamente.
+- O aplicativo tenta recuperar interrupções curtas automaticamente; falhas prolongadas ainda podem exigir que o compartilhamento seja iniciado novamente.
 - O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
 - A remoção feita pelo dono vale enquanto a sala existir; a administração também pode aplicar bloqueios persistentes a usuários ou servidores.
 - O Discord informa qual servidor autorizou a aplicação, mas o evento de desautorização não traz o servidor. Por isso o painel mantém o histórico de uso/autorização e mostra separadamente a contagem aproximada de instalações atuais fornecida pelo Discord.
@@ -227,6 +228,7 @@ Preencha `.dev.vars` com as credenciais de desenvolvimento. O arquivo real é ig
 |---|---|
 | `DISCORD_CLIENT_ID` | ID público da aplicação no Discord |
 | `DISCORD_CLIENT_SECRET` | Credencial privada do OAuth2 |
+| `DISCORD_BOT_TOKEN` | Confere o canal de voz e envia changelogs aos canais configurados |
 | `SESSION_SECRET` | Valor aleatório forte para assinatura dos tokens |
 | `PUBLIC_ORIGIN` | Endereço público da aplicação, sem barra no final |
 
@@ -234,7 +236,6 @@ Preencha `.dev.vars` com as credenciais de desenvolvimento. O arquivo real é ig
 
 | Variável | Finalidade |
 |---|---|
-| `DISCORD_BOT_TOKEN` | Permite conferir a presença do participante no canal de voz |
 | `ADMIN_DISCORD_IDS` | IDs pessoais autorizados no painel, separados por vírgula; recomendado mesmo para o proprietário |
 | `DISCORD_PUBLIC_KEY` | Chave pública para validar webhooks; normalmente é descoberta automaticamente pela API do Discord |
 
@@ -260,7 +261,7 @@ openssl rand -base64 48
    pnpm exec wrangler login
    ```
 
-2. Copie `.production.vars.example` para `.production.vars` e preencha os quatro secrets obrigatórios.
+2. Copie `.production.vars.example` para `.production.vars` e preencha os cinco secrets obrigatórios.
 
 3. Faça o primeiro deploy enviando todos os secrets de forma protegida:
 

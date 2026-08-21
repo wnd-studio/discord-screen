@@ -158,7 +158,7 @@ Regras importantes:
 - não envie `.production.vars` para ninguém;
 - o arquivo `.production.vars` já está incluído no `.gitignore`.
 
-`DISCORD_BOT_TOKEN` é opcional e não é necessário para a instalação básica. Também são opcionais:
+`DISCORD_BOT_TOKEN` é necessário para conferir canais de voz e para permitir que administradores escolham um canal de changelogs. Para usar somente as salas web, ele pode ficar vazio. Também são opcionais:
 
 - `ADMIN_DISCORD_IDS`: IDs pessoais que podem entrar em `/admin`, separados por vírgula. É recomendado configurar explicitamente o ID do proprietário porque o Discord nem sempre o devolve nos metadados da aplicação;
 - `DISCORD_PUBLIC_KEY`: chave pública dos webhooks. Normalmente o Worker a descobre automaticamente pela API do Discord.
@@ -297,7 +297,7 @@ Os secrets já cadastrados na Cloudflare são preservados pelos deploys seguinte
 
 ### `Required secrets are not configured`
 
-Confirme se todos os quatro campos de `.production.vars` foram preenchidos e execute o deploy com:
+Confirme se os cinco campos principais de `.production.vars` foram preenchidos e execute o deploy com:
 
 ```bash
 pnpm exec wrangler deploy --secrets-file .production.vars

@@ -14,7 +14,7 @@
         <span>WND Studio · Discord Screen</span>
       </a>
       <h1>Política de Privacidade</h1>
-      <p class="data">Última atualização: 19 de agosto de 2026</p>
+      <p class="data">Última atualização: 21 de agosto de 2026</p>
 
       <div class="resumo">
         <p><strong>Em resumo:</strong></p>
@@ -83,6 +83,11 @@
         <li>bloqueios e ações realizadas no painel administrativo.</li>
       </ul>
       <p>Esses registros não contêm imagens, áudio nem quadros da tela transmitida.</p>
+      <p>
+        Quando um administrador configura avisos de atualização, também guardamos os identificadores
+        e nomes do servidor e do canal escolhidos, além de quem realizou a configuração. O bot usa
+        esses dados somente para publicar os changelogs solicitados pelo operador do aplicativo.
+      </p>
 
       <h3>2.4 Conteúdo transmitido</h3>
       <p>
@@ -141,6 +146,11 @@
               <td>Bloqueios e ações administrativas</td>
               <td>SQLite persistente em Durable Object</td>
               <td>Até o bloqueio ser removido ou o histórico deixar de ser necessário</td>
+            </tr>
+            <tr>
+              <td>Canal escolhido para receber changelogs</td>
+              <td>SQLite persistente em Durable Object</td>
+              <td>Até o bot perder acesso ao canal ou a configuração ser substituída</td>
             </tr>
           </tbody>
         </table>

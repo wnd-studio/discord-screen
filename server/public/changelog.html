@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Canal de novidades · Discord Screen</title>
+    <link rel="icon" type="image/png" href="/brand/wnd-neutral.png" />
+    <link rel="stylesheet" href="/changelog.css?v=1" />
+  </head>
+  <body>
+    <main class="setup-card">
+      <img src="/brand/wnd-calm.png" alt="WND Studio" />
+      <p class="eyebrow">DISCORD SCREEN</p>
+      <h1>Receber novidades</h1>
+
+      <section id="loading">
+        <p>Carregando os canais do servidor…</p>
+      </section>
+
+      <section id="form" hidden>
+        <p id="guildLine" class="sub"></p>
+        <label for="channel">Canal das atualizações</label>
+        <select id="channel"></select>
+        <p class="help">Enviaremos uma mensagem de teste para confirmar que o aplicativo possui acesso.</p>
+        <button id="confirm">Confirmar canal</button>
+      </section>
+
+      <section id="success" hidden>
+        <div class="success-icon">✓</div>
+        <h2>Configuração concluída</h2>
+        <p id="successText" class="sub"></p>
+        <a class="button" href="/">Abrir aplicativo</a>
+      </section>
+
+      <section id="failure" hidden>
+        <div class="error-icon">!</div>
+        <h2>Não foi possível configurar</h2>
+        <p id="failureText" class="sub"></p>
+        <a class="button" href="/changelog/install">Tentar novamente</a>
+      </section>
+
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="/changelog.js?v=1"></script>
+  </body>
+</html>

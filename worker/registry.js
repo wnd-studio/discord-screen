@@ -90,6 +90,32 @@ export class RoomRegistry extends DurableObject {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS changelog_channels (
+        guild_id TEXT PRIMARY KEY,
+        guild_name TEXT,
+        channel_id TEXT NOT NULL,
+        channel_name TEXT,
+        configured_by TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_sent_at INTEGER,
+        last_error TEXT
+      );
+      CREATE INDEX IF NOT EXISTS changelog_enabled ON changelog_channels(enabled, updated_at DESC);
+
+      CREATE TABLE IF NOT EXISTS changelog_publications (
+        id TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT,
+        details TEXT,
+        success_count INTEGER NOT NULL DEFAULT 0,
+        failure_count INTEGER NOT NULL DEFAULT 0,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL
       );`
     );
 
@@ -298,6 +324,61 @@ export class RoomRegistry extends DurableObject {
       return json({ ok: true });
     }
 
+    if (url.pathname === '/changelog/configure') {
+      if (!payload.guildId || !payload.channelId || !payload.configuredBy) {
+        return json({ error: 'Configuração de canal inválida.' }, 400);
+      }
+      const now = Date.now();
+      this.ctx.storage.sql.exec(
+        `INSERT INTO changelog_channels
+          (guild_id, guild_name, channel_id, channel_name, configured_by, enabled, created_at, updated_at, last_error)
+         VALUES (?, ?, ?, ?, ?, 1, ?, ?, NULL)
+         ON CONFLICT(guild_id) DO UPDATE SET guild_name=excluded.guild_name,
+           channel_id=excluded.channel_id, channel_name=excluded.channel_name,
+           configured_by=excluded.configured_by, enabled=1, updated_at=excluded.updated_at,
+           last_error=NULL`,
+        payload.guildId, cleanText(payload.guildName, 100), payload.channelId,
+        cleanText(payload.channelName, 100), payload.configuredBy, now, now
+      );
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/changelog/list') {
+      const rows = this.ctx.storage.sql.exec(
+        `SELECT guild_id, guild_name, channel_id, channel_name, configured_by,
+                enabled, created_at, updated_at, last_sent_at, last_error
+         FROM changelog_channels ORDER BY updated_at DESC`
+      ).toArray().map((row) => ({
+        guildId: row.guild_id, guildName: row.guild_name, channelId: row.channel_id,
+        channelName: row.channel_name, configuredBy: row.configured_by,
+        enabled: Boolean(row.enabled), createdAt: row.created_at, updatedAt: row.updated_at,
+        lastSentAt: row.last_sent_at, lastError: row.last_error,
+      }));
+      return json({ channels: rows });
+    }
+
+    if (url.pathname === '/changelog/delivery') {
+      this.ctx.storage.sql.exec(
+        `UPDATE changelog_channels SET enabled = ?, last_sent_at = ?, last_error = ? WHERE guild_id = ?`,
+        payload.disable ? 0 : 1, payload.ok ? Date.now() : null,
+        payload.ok ? null : cleanText(payload.error, 240), payload.guildId
+      );
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/changelog/published') {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO changelog_publications
+          (id, version, title, summary, details, success_count, failure_count, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        payload.id, cleanText(payload.version, 24), cleanText(payload.title, 120),
+        cleanText(payload.summary, 500), String(payload.details || '').slice(0, 4000),
+        Number(payload.successCount) || 0, Number(payload.failureCount) || 0,
+        payload.createdBy, Date.now()
+      );
+      return json({ ok: true });
+    }
+
     if (url.pathname === '/admin/audit') {
       this.ctx.storage.sql.exec(
         `INSERT INTO admin_audit
@@ -428,6 +509,26 @@ export class RoomRegistry extends DurableObject {
       "SELECT value FROM settings WHERE key = 'maintenance'"
     ).toArray()[0]?.value === 'true';
 
-    return json({ generatedAt: now, totals, rooms, servers, blocks, audit, daily, maintenance });
+    const changelogChannels = this.ctx.storage.sql.exec(
+      `SELECT guild_id, guild_name, channel_id, channel_name, enabled, updated_at,
+              last_sent_at, last_error FROM changelog_channels ORDER BY updated_at DESC LIMIT 100`
+    ).toArray().map((row) => ({
+      guildId: row.guild_id, guildName: row.guild_name, channelId: row.channel_id,
+      channelName: row.channel_name, enabled: Boolean(row.enabled), updatedAt: row.updated_at,
+      lastSentAt: row.last_sent_at, lastError: row.last_error,
+    }));
+    const changelogHistory = this.ctx.storage.sql.exec(
+      `SELECT id, version, title, success_count, failure_count, created_by, created_at
+       FROM changelog_publications ORDER BY created_at DESC LIMIT 20`
+    ).toArray().map((row) => ({
+      id: row.id, version: row.version, title: row.title,
+      successCount: row.success_count, failureCount: row.failure_count,
+      createdBy: row.created_by, createdAt: row.created_at,
+    }));
+
+    return json({
+      generatedAt: now, totals, rooms, servers, blocks, audit, daily, maintenance,
+      changelog: { channels: changelogChannels, history: changelogHistory },
+    });
   }
 }
