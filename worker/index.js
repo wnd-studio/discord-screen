@@ -468,7 +468,11 @@ async function api(request, env, url) {
     architecture: 'cloudflare-workers-durable-objects',
     features: ['admin-dashboard', 'usage-history', 'discord-event-webhooks', 'discord-changelog-notifications'],
   });
-  if (url.pathname === '/api/config') return json({ clientId: env.DISCORD_CLIENT_ID || null, asset: null }, 200, { 'cache-control': 'no-store' });
+  if (url.pathname === '/api/config') return json({
+    clientId: env.DISCORD_CLIENT_ID || null,
+    supportUrl: env.SUPPORT_URL || 'https://github.com/wnd-studio/discord-screen',
+    asset: null,
+  }, 200, { 'cache-control': 'no-store' });
 
   if (url.pathname === '/api/token' && request.method === 'POST') {
     if (!data.code) return error('code obrigatorio');

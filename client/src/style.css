@@ -1343,6 +1343,18 @@ button {
   background: #111214;
 }
 
+.btn.support-btn {
+  color: #ffd7e5;
+  border-color: rgba(244, 114, 182, 0.42);
+  background: rgba(190, 24, 93, 0.16);
+}
+
+.btn.support-btn:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(244, 114, 182, 0.75);
+  background: rgba(190, 24, 93, 0.3);
+}
+
 .modal-note {
   margin: 16px 0 0;
   padding: 10px 12px;

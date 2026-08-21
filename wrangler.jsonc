@@ -18,7 +18,10 @@
   "secrets": {
     "required": ["DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "SESSION_SECRET", "PUBLIC_ORIGIN"]
   },
-  "vars": { "ENVIRONMENT": "production" },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "SUPPORT_URL": "https://github.com/wnd-studio/discord-screen"
+  },
   "observability": { "enabled": true }
 }
 

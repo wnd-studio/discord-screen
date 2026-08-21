@@ -34,6 +34,7 @@ let ws = null;
 let participants = [];
 let reconnectDelay = 1000;
 let lagTimer = null;
+let supportUrl = 'https://github.com/wnd-studio/discord-screen';
 // Transmissão nascida aqui dentro, quando o Discord permite capturar no iframe.
 let myBroadcast = null;
 // Volume de tudo que chega, de 0 a 1. Vale para todas as telas e sobrevive a
@@ -1022,8 +1023,10 @@ async function boot() {
   // criar e entrar é que pedem identidade.
   session = inDiscord ? await authDiscord(config) : await authWeb();
 
-  clientId = params.get('client_id') || (await config).clientId || null;
-  checkVersion((await config).asset);
+  const configData = await config;
+  clientId = params.get('client_id') || configData.clientId || null;
+  supportUrl = configData.supportUrl || supportUrl;
+  checkVersion(configData.asset);
   clearTimeout(vigia);
 
   renderProfileButton();
@@ -1065,10 +1068,25 @@ function showNewsOnce() {
 
 $('news').addEventListener('click', openNews);
 $('lobbyNews').addEventListener('click', openNews);
+$('support').addEventListener('click', openSupport);
+$('lobbySupport').addEventListener('click', openSupport);
 $('newsClose').addEventListener('click', closeNews);
 $('newsModal').addEventListener('click', (event) => {
   if (event.target === $('newsModal')) closeNews();
 });
+
+async function openSupport() {
+  try {
+    if (inDiscord) {
+      const result = await sdk?.commands.openExternalLink({ url: supportUrl });
+      if (result?.opened === false) toast('Você cancelou a abertura do link.');
+    } else {
+      window.open(supportUrl, '_blank', 'noopener,noreferrer');
+    }
+  } catch (err) {
+    toast(`Não foi possível abrir o apoio: ${err.message}`, true);
+  }
+}
 
 /** Abre a sala desta call, criando-a na primeira pessoa que chega. */
 async function entrarNaCall() {

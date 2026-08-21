@@ -6,6 +6,9 @@ DISCORD_BOT_TOKEN=
 SESSION_SECRET=
 PUBLIC_ORIGIN=https://discord-screen.SEUSUBDOMINIO.workers.dev
 
+# Link público aberto pelo botão "Apoiar o projeto". Pode ser Pix, campanha ou site.
+SUPPORT_URL=https://github.com/wnd-studio/discord-screen
+
 # Opcionais: proprietário/equipe são detectados automaticamente.
 ADMIN_DISCORD_IDS=
 DISCORD_PUBLIC_KEY=
