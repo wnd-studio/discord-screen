@@ -8,7 +8,7 @@
  * Toda a lógica de captura e codificação vive em /shared/broadcaster.js, a mesma
  * usada dentro da Activity — aqui é só a interface.
  */
-import { createBroadcaster, supportError } from '/shared/broadcaster.js?v=5';
+import { compatibilityInfo, createBroadcaster, supportError } from '/shared/broadcaster.js?v=6';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,8 +21,9 @@ let connectionState = 'idle';
 
 function browserGuidance() {
   const ua = navigator.userAgent;
+  const support = compatibilityInfo();
   if (/Firefox/i.test(ua)) {
-    return 'No Firefox, você pode assistir normalmente, mas a transmissão com áudio e WebCodecs é limitada. Para transmitir, use Chrome ou Edge atualizado.';
+    return `Firefox detectado: transmissão em modo ${support.mode}. Vídeo e câmera estão disponíveis; o áudio depende da fonte oferecida pelo Firefox.`;
   }
   if (/Edg\//i.test(ua)) {
     return 'No Edge, prefira “Aba” para áudio mais confiável. Algumas janelas compatíveis também exibem a opção “Compartilhar áudio”.';
@@ -30,7 +31,10 @@ function browserGuidance() {
   if (/Chrome|Chromium|OPR|Brave/i.test(ua)) {
     return 'No Chrome, marque “Compartilhar áudio”. Aba é a opção mais confiável; algumas janelas compatíveis também oferecem áudio isolado.';
   }
-  return 'A captura de áudio depende do navegador. Para maior compatibilidade, use Chrome ou Edge atualizado.';
+  if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR/i.test(ua)) {
+    return `Safari detectado: transmissão em modo ${support.mode}. O áudio de tela pode não ser oferecido pelo macOS.`;
+  }
+  return `Modo ${support.mode} ativado. A captura de áudio depende das fontes oferecidas pelo navegador.`;
 }
 
 function setStatus(msg, kind = '') {
@@ -56,8 +60,7 @@ function readTokenPayload() {
 // ------------------------------------------------------------------ arranque
 
 const payload = token && readTokenPayload();
-// requireChromium: nos demais navegadores a captura sai visivelmente pior.
-const missing = supportError({ requireChromium: true });
+const missing = supportError();
 
 if (!payload) {
   fail('Link inválido.', 'Volte à atividade no Discord e clique em compartilhar novamente.');

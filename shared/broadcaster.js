@@ -19,6 +19,15 @@ const CANDIDATES = [
   { codec: 'vp09.00.10.08' },
 ];
 
+function codecCandidates() {
+  const ua = navigator.userAgent;
+  if (/Firefox/i.test(ua)) return [CANDIDATES[2], CANDIDATES[1], CANDIDATES[0], CANDIDATES[3]];
+  if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR/i.test(ua)) {
+    return [CANDIDATES[1], CANDIDATES[0], CANDIDATES[2], CANDIDATES[3]];
+  }
+  return CANDIDATES;
+}
+
 // Keyframe periódico: seguro barato para quem reconecta fora do fluxo normal.
 const KEYFRAME_EVERY_MS = 3000;
 
@@ -46,19 +55,24 @@ function fitWithin(w, h) {
 }
 
 /** Motivo pelo qual este navegador não consegue transmitir, ou null. */
-export function supportError({ requireChromium = false } = {}) {
+export function supportError() {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     return 'Este navegador não permite captura de tela. Navegador de celular não suporta captura — use um desktop.';
   }
   if (!window.VideoEncoder || !window.VideoFrame || !window.EncodedVideoChunk) {
-    return 'Este navegador não tem WebCodecs, necessário para transmitir. Use Chrome, Edge ou outro navegador Chromium no desktop.';
-  }
-  // Exigência de produto, não de capacidade: o caminho via <video> funciona em
-  // Firefox e Safari, mas a captura sai visivelmente pior.
-  if (requireChromium && !window.MediaStreamTrackProcessor) {
-    return 'Transmitir exige um navegador Chromium — Chrome, Edge, Brave ou Opera. Nos outros a captura fica com qualidade ruim, então está desabilitada. Você continua podendo assistir.';
+    return 'Este navegador não oferece a tecnologia de vídeo necessária. Atualize o navegador ou tente Chrome, Edge, Firefox ou Safari no computador.';
   }
   return null;
+}
+
+export function compatibilityInfo() {
+  return {
+    capture: Boolean(navigator.mediaDevices?.getDisplayMedia),
+    video: Boolean(window.VideoEncoder && window.VideoFrame && window.EncodedVideoChunk),
+    audio: Boolean(window.AudioEncoder && window.AudioData),
+    directFrames: Boolean(window.MediaStreamTrackProcessor),
+    mode: window.MediaStreamTrackProcessor ? 'otimizado' : 'compatível',
+  };
 }
 
 /**
@@ -111,6 +125,10 @@ export function createBroadcaster({
   let cameraStream = null;
   let cameraVideo = null;
   let audioContext = null;
+  let audioCaptureContext = null;
+  let audioCaptureSource = null;
+  let audioCaptureProcessor = null;
+  let audioCaptureMute = null;
   let audioMeterTimer = null;
   let audioMeterSource = null;
   // Pediram som, mas a superfície escolhida traria o Discord junto. Guardado
@@ -360,6 +378,7 @@ export function createBroadcaster({
     // mesmo encoder e a fila estoura.
     await audioReader?.cancel().catch(() => {});
     audioReader = null;
+    stopAudioCompatibilityCapture();
     if (audioEncoder?.state === 'configured') {
       try {
         audioEncoder.close();
@@ -511,9 +530,9 @@ export function createBroadcaster({
    * se decodifica sozinho, então não existe aqui o equivalente ao keyframe.
    */
   async function pumpAudio(track, source = 'system') {
-    if (!window.AudioEncoder || !window.MediaStreamTrackProcessor) {
+    if (!window.AudioEncoder || !window.AudioData) {
       onAudioStatus?.({ active: false, reason: 'unsupported' });
-      onAviso?.('Este navegador não consegue codificar o áudio da transmissão. Use Chrome ou Edge atualizado.');
+      onAviso?.('Este navegador consegue transmitir a imagem, mas não oferece o codificador de áudio necessário.');
       return;
     }
 
@@ -546,6 +565,11 @@ export function createBroadcaster({
     // O mesmo caminho do vídeo: quem chega depois recebe isto ao pedir a tela.
     lastAudioConfig = { codec: 'opus', sampleRate, numberOfChannels };
     ws?.send(JSON.stringify({ type: 'audio-config', config: lastAudioConfig }));
+
+    if (!window.MediaStreamTrackProcessor) {
+      pumpAudioViaWebAudio(track, sampleRate, numberOfChannels);
+      return;
+    }
 
     audioReader = new MediaStreamTrackProcessor({ track }).readable.getReader();
     while (running) {
@@ -582,10 +606,11 @@ export function createBroadcaster({
     // Duas passadas: navegadores que não conhecem `latencyMode` podem recusar a
     // configuração inteira por causa dela. Mais latência é melhor que nada.
     for (const realtime of [true, false]) {
-      for (const candidate of CANDIDATES) {
+      for (const candidate of codecCandidates()) {
         const cfg = { ...candidate, width, height, bitrate, framerate: fps };
         if (realtime) cfg.latencyMode = 'realtime';
         try {
+          if (typeof VideoEncoder.isConfigSupported !== 'function') return cfg;
           const { supported } = await VideoEncoder.isConfigSupported(cfg);
           if (supported) return cfg;
         } catch {
@@ -718,6 +743,59 @@ export function createBroadcaster({
     out.close();
     frames++;
     return true;
+  }
+
+  /** Firefox/Safari: transforma a faixa em AudioData através da Web Audio API. */
+  function pumpAudioViaWebAudio(track, sampleRate, numberOfChannels) {
+    try {
+      audioCaptureContext = new AudioContext({ sampleRate, latencyHint: 'interactive' });
+      audioCaptureSource = audioCaptureContext.createMediaStreamSource(new MediaStream([track]));
+      audioCaptureProcessor = audioCaptureContext.createScriptProcessor(2048, numberOfChannels, numberOfChannels);
+      audioCaptureMute = audioCaptureContext.createGain();
+      audioCaptureMute.gain.value = 0;
+      let timestamp = 0;
+      audioCaptureProcessor.onaudioprocess = (event) => {
+        if (!running || viewers === 0 || audioEncoder?.state !== 'configured') return;
+        const frames = event.inputBuffer.length;
+        const planar = new Float32Array(frames * numberOfChannels);
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+          planar.set(event.inputBuffer.getChannelData(channel), channel * frames);
+        }
+        let audioData;
+        try {
+          audioData = new AudioData({
+            format: 'f32-planar', sampleRate, numberOfFrames: frames,
+            numberOfChannels, timestamp, data: planar,
+          });
+          audioEncoder.encode(audioData);
+          timestamp += Math.round((frames * 1_000_000) / sampleRate);
+        } catch (err) {
+          console.warn('[audio compat]', err.message);
+        } finally {
+          audioData?.close();
+        }
+      };
+      audioCaptureSource.connect(audioCaptureProcessor);
+      audioCaptureProcessor.connect(audioCaptureMute);
+      audioCaptureMute.connect(audioCaptureContext.destination);
+      audioCaptureContext.resume().catch(() => {});
+      onAviso?.('Modo de áudio compatível ativado para este navegador.');
+    } catch (err) {
+      onAudioStatus?.({ active: false, reason: 'unsupported' });
+      onAviso?.(`O navegador não conseguiu preparar o áudio: ${err.message}`);
+    }
+  }
+
+  function stopAudioCompatibilityCapture() {
+    if (audioCaptureProcessor) audioCaptureProcessor.onaudioprocess = null;
+    try { audioCaptureSource?.disconnect(); } catch {}
+    try { audioCaptureProcessor?.disconnect(); } catch {}
+    try { audioCaptureMute?.disconnect(); } catch {}
+    audioCaptureContext?.close().catch(() => {});
+    audioCaptureContext = null;
+    audioCaptureSource = null;
+    audioCaptureProcessor = null;
+    audioCaptureMute = null;
   }
 
   function drawCamera() {
@@ -1062,6 +1140,7 @@ export function createBroadcaster({
     // A tela nova traz a própria faixa de som; a antiga morreu com o stream.
     await audioReader?.cancel().catch(() => {});
     audioReader = null;
+    stopAudioCompatibilityCapture();
     const novoAudio = prepararSom(track, fresh);
     if (audioEncoder?.state === 'configured') {
       try { audioEncoder.close(); } catch {}
@@ -1119,6 +1198,7 @@ export function createBroadcaster({
     audioMeterSource = null;
     audioContext?.close().catch(() => {});
     audioContext = null;
+    stopAudioCompatibilityCapture();
     stage = null;
     stageCtx = null;
   }

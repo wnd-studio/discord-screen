@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.7.0-22C55E?style=flat-square" alt="Versão 0.7.0">
+    <img src="https://img.shields.io/badge/versao-0.8.0-22C55E?style=flat-square" alt="Versão 0.8.0">
   </p>
 
   <p>
@@ -111,6 +111,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Eventos de autorização do Discord | ✅ Webhook assinado |
 | Changelogs enviados pelo bot | ✅ Canal escolhido em página, sem comandos |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
+| Modo compatível para Firefox e Safari desktop | ✅ Codec e captura selecionados automaticamente |
 | Áudio de abas, sistema ou janelas compatíveis | ✅ Opus; disponibilidade depende do navegador e da fonte |
 | Múltiplos transmissores | ✅ Até 4 por sala |
 | Espectadores | ✅ Limite de segurança de 50 por sala |
@@ -180,7 +181,7 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - A captura de áudio depende do navegador, do sistema operacional e da fonte escolhida. Abas costumam oferecer o suporte mais confiável; algumas janelas não disponibilizam áudio ao navegador.
 - A transmissão utiliza relay WebSocket, e não uma infraestrutura WebRTC/SFU. Cada espectador aumenta o tráfego de saída da sala.
 - O plano gratuito da Cloudflare possui cotas diárias. O aplicativo pode ficar publicado continuamente, mas transmissões intensas ou várias salas ativas por muitas horas podem consumir a cota.
-- Captura e reprodução dependem do suporte a WebCodecs. Navegadores incompatíveis podem não conseguir transmitir ou assistir.
+- Captura e reprodução dependem do suporte a WebCodecs. Chrome/Edge usam o caminho otimizado; Firefox/Safari desktop usam um caminho compatível quando necessário. Navegadores antigos continuam sem suporte.
 - O aplicativo tenta recuperar interrupções curtas automaticamente; falhas prolongadas ainda podem exigir que o compartilhamento seja iniciado novamente.
 - O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
 - A remoção feita pelo dono vale enquanto a sala existir; a administração também pode aplicar bloqueios persistentes a usuários ou servidores.
