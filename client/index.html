@@ -12,6 +12,7 @@
       <div class="topbar">
         <div id="people" class="pill" title="Pessoas na sala"></div>
         <div id="roomPill" class="pill room-pill" hidden></div>
+        <div id="connectionPill" class="pill connection-pill" hidden>Conectando…</div>
       </div>
 
       <main id="grid" class="grid"></main>
@@ -294,6 +295,26 @@
             </span>
           </label>
 
+          <div id="mCameraOptions" class="camera-settings" hidden>
+            <label class="field">
+              <span>Posição da câmera</span>
+              <select id="mCameraPosition">
+                <option value="bottom-right">Inferior direita</option>
+                <option value="bottom-left">Inferior esquerda</option>
+                <option value="top-right">Superior direita</option>
+                <option value="top-left">Superior esquerda</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Tamanho da câmera</span>
+              <select id="mCameraSize">
+                <option value="small">Pequena</option>
+                <option value="medium" selected>Média</option>
+                <option value="large">Grande</option>
+              </select>
+            </label>
+          </div>
+
           <button id="modalSwap" class="panel-btn" hidden>Trocar a tela compartilhada</button>
           <button id="modalSom" class="panel-btn" hidden>Som de uma aba</button>
 
@@ -335,11 +356,23 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">ATUALIZAÇÃO 0.5</div>
+          <div class="news-kicker">ATUALIZAÇÃO 0.6</div>
           <h2 id="newsTitle">Novidades no Screen Share</h2>
           <p class="modal-sub">Melhorias para deixar as transmissões mais completas e fáceis de usar.</p>
 
           <ul class="news-list">
+            <li>
+              <span class="news-icon">✓</span>
+              <div><strong>Teste antes de entrar ao vivo</strong><p>Confira a tela, a câmera e o medidor de áudio antes de começar a transmissão.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">↻</span>
+              <div><strong>Reconexão automática</strong><p>Oscilações rápidas de internet agora são recuperadas sem encerrar a transmissão.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">⚙</span>
+              <div><strong>Câmera personalizável</strong><p>Escolha a câmera, o tamanho e o canto em que ela aparece.</p></div>
+            </li>
             <li>
               <span class="news-icon">🔊</span>
               <div><strong>Áudio melhorado</strong><p>Agora tentamos capturar também o áudio de janelas compatíveis, além de abas e do sistema.</p></div>

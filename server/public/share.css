@@ -221,6 +221,11 @@ button:disabled {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
+.camera-preview[data-position^='top'] { top: 14px; bottom: auto; }
+.camera-preview[data-position$='left'] { left: 14px; right: auto; }
+.camera-preview[data-size='small'] { width: min(17%, 160px); }
+.camera-preview[data-size='large'] { width: min(32%, 300px); }
+
 .preset {
   margin: 0 0 4px;
   color: var(--muted);
@@ -235,6 +240,74 @@ button:disabled {
   background: #1e1f22;
   color: var(--muted);
   font-size: 13px;
+}
+
+.camera-options {
+  margin-top: 12px;
+  padding: 10px 12px 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111214;
+}
+
+.camera-options .row {
+  margin-bottom: 9px;
+}
+
+.step-title {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+
+.audio-test {
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #1e1f22;
+}
+
+.audio-test-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.audio-meter {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #111214;
+}
+
+.audio-meter i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #23a55a 0 70%, #f0b232 85%, #f23f43);
+  transition: width 0.08s linear;
+}
+
+.audio-test p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.preview-actions button {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .preview-actions { grid-template-columns: 1fr; }
 }
 
 .stats {

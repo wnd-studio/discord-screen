@@ -24,6 +24,7 @@ const streams = new Map(); // slot -> { userId, canvas, player }
 // disso, filtrar só na exibição gastaria a mesma saída.
 const available = new Map(); // slot -> { userId, config }
 const watching = new Set(); // slots que eu pedi para assistir
+const resumeWatchingUsers = new Set(); // restaura o que era assistido após uma queda
 
 let sdk = null;
 let session = null;
@@ -78,7 +79,7 @@ let fullscreenEnteredAt = 0;
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.5';
+const NEWS_VERSION = '0.6';
 
 // ------------------------------------------------------------------- helpers
 
@@ -1112,6 +1113,7 @@ function limparSala() {
   closeAllStreams();
   available.clear();
   watching.clear();
+  resumeWatchingUsers.clear();
   participants = [];
   lastRoomState = null;
   activeSlot = null;
@@ -1133,6 +1135,7 @@ async function showLobby() {
   $('grid').hidden = true;
   $('empty').hidden = true;
   $('roomPill').hidden = true;
+  $('connectionPill').hidden = true;
   $('leaveRoom').hidden = true;
   $('inviteRoom').hidden = true;
   $('roomSettings').hidden = true;
@@ -1560,6 +1563,9 @@ function connect() {
     abriu = true;
     reconnectDelay = 1000;
     $('grid').hidden = false;
+    $('connectionPill').hidden = false;
+    $('connectionPill').classList.remove('reconnecting');
+    $('connectionPill').textContent = 'Conectado';
     setEmpty('Ninguém na sala', 'Aguardando participantes.');
 
     // O apelido é do cliente, então precisa ser reenviado a cada conexão —
@@ -1607,7 +1613,12 @@ function connect() {
         const info = available.get(s.slot) ?? { userId: s.userId, config: null };
         info.watchers = s.watchers ?? [];
         available.set(s.slot, info);
+        if (resumeWatchingUsers.has(s.userId) && !watching.has(s.slot)) {
+          watching.add(s.slot);
+          ws?.send(JSON.stringify({ type: 'watch', slot: s.slot }));
+        }
       }
+      if (resumeWatchingUsers.size) resumeWatchingUsers.clear();
       for (const slot of [...available.keys()]) if (!live.has(slot)) available.delete(slot);
       for (const slot of [...streams.keys()]) if (!live.has(slot)) closeStream(slot);
       for (const slot of [...watching]) if (!live.has(slot)) watching.delete(slot);
@@ -1654,6 +1665,10 @@ function connect() {
   });
 
   ws.addEventListener('close', () => {
+    for (const slot of watching) {
+      const userId = available.get(slot)?.userId;
+      if (userId) resumeWatchingUsers.add(userId);
+    }
     closeAllStreams();
     available.clear();
     watching.clear();
@@ -1678,6 +1693,9 @@ function connect() {
     }
 
     setEmpty('Reconectando…', 'A conexão com a sala caiu.');
+    $('connectionPill').hidden = false;
+    $('connectionPill').classList.add('reconnecting');
+    $('connectionPill').textContent = 'Reconectando…';
     // Backoff — evita martelar o servidor se ele estiver fora do ar.
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
@@ -1745,6 +1763,11 @@ function openModal(mode) {
   $('modalSwap').hidden = !live;
   $('modalNote').hidden = live;
 
+  if (!live) {
+    $('mCameraPosition').value = read('cameraPosition') || 'bottom-right';
+    $('mCameraSize').value = read('cameraSize') || 'medium';
+  }
+
   $('modalSom').hidden = !live || !myBroadcast;
   if (live && myBroadcast) {
     $('modalSom').textContent = myBroadcast.temSom()
@@ -1755,7 +1778,11 @@ function openModal(mode) {
     const s = myBroadcast.getSettings();
     $('mQuality').value = String(s.bitrate);
     $('mFps').value = String(s.fps);
+    $('mCameraPosition').value = s.cameraPosition;
+    $('mCameraSize').value = s.cameraSize;
   }
+
+  $('mCameraOptions').hidden = !$('mCamera').checked;
 
   $('modal').hidden = false;
 }
@@ -1845,6 +1872,8 @@ async function broadcastFromHere() {
     fps: Number($('mFps').value),
     audio: $('mAudio').checked,
     camera: $('mCamera').checked,
+    cameraPosition: $('mCameraPosition').value,
+    cameraSize: $('mCameraSize').value,
     onAviso: (m) => toast(m, true),
     onPerformance: (m) => toast(m),
     onCameraStatus: () => renderBar(),
@@ -1892,6 +1921,12 @@ $('modalGo').addEventListener('click', async () => {
       bitrate: Number($('mQuality').value),
       fps: Number($('mFps').value),
     });
+    myBroadcast?.setCameraLayout({
+      position: $('mCameraPosition').value,
+      size: $('mCameraSize').value,
+    });
+    store('cameraPosition', $('mCameraPosition').value);
+    store('cameraSize', $('mCameraSize').value);
     closeModal();
     return;
   }
@@ -1899,7 +1934,11 @@ $('modalGo').addEventListener('click', async () => {
   // O clique é o gesto de usuário que getDisplayMedia exige, então é aqui que
   // dá para transmitir sem sair do Discord. A aba externa só entra se o iframe
   // não tiver permissão de captura.
-  if (await broadcastFromHere()) return;
+  // Fora do Discord usamos a página de captura porque ela oferece a etapa de
+  // teste com prévia e medidor. Dentro da Activity ainda tentamos a captura
+  // direta; na maioria dos clientes a política do iframe direciona para a
+  // mesma página externa.
+  if (inDiscord && await broadcastFromHere()) return;
 
   closeModal();
 
@@ -1910,6 +1949,10 @@ $('modalGo').addEventListener('click', async () => {
   url.searchParams.set('fps', $('mFps').value);
   url.searchParams.set('som', $('mAudio').checked ? '1' : '0');
   url.searchParams.set('cam', $('mCamera').checked ? '1' : '0');
+  url.searchParams.set('camPos', $('mCameraPosition').value);
+  url.searchParams.set('camSize', $('mCameraSize').value);
+  store('cameraPosition', $('mCameraPosition').value);
+  store('cameraSize', $('mCameraSize').value);
 
   if (inDiscord) {
     try {
@@ -2089,6 +2132,10 @@ async function setFullscreen(active) {
     } catch {}
   }
 }
+
+$('mCamera').addEventListener('change', () => {
+  $('mCameraOptions').hidden = !$('mCamera').checked;
+});
 
 const toggleFullscreen = () => setFullscreen(!telaCheia);
 

@@ -9,7 +9,7 @@
          dos cabeçalhos no-store guardou a versão antiga por heurística do
          navegador, e continuaria usando ela para sempre. Trocar a query força
          uma URL nova. Incremente ao publicar mudanças nesses arquivos. -->
-    <link rel="stylesheet" href="/share.css?v=10" />
+    <link rel="stylesheet" href="/share.css?v=13" />
   </head>
   <body>
     <main class="card">
@@ -53,13 +53,54 @@
           <span>Mostrar minha câmera no canto</span>
         </label>
 
-        <p class="note">
+        <div id="cameraOptions" class="camera-options" hidden>
+          <div class="row">
+            <label for="cameraDevice">Câmera</label>
+            <select id="cameraDevice"><option value="">Câmera padrão</option></select>
+          </div>
+          <div class="row compact-row">
+            <label for="cameraPosition">Posição</label>
+            <select id="cameraPosition">
+              <option value="bottom-right">Inferior direita</option>
+              <option value="bottom-left">Inferior esquerda</option>
+              <option value="top-right">Superior direita</option>
+              <option value="top-left">Superior esquerda</option>
+            </select>
+          </div>
+          <div class="row compact-row">
+            <label for="cameraSize">Tamanho</label>
+            <select id="cameraSize">
+              <option value="small">Pequena</option>
+              <option value="medium" selected>Média</option>
+              <option value="large">Grande</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="browserNote" class="note">
           Na janela que abrir, marque também <strong>“Compartilhar áudio”</strong>. O som de
           uma aba é a opção mais confiável. Em Chrome/Edge atualizado, algumas janelas
           também oferecem áudio isolado. A disponibilidade depende do aplicativo escolhido.
         </p>
 
-        <button id="start" class="primary">Escolher tela e transmitir</button>
+        <button id="start" class="primary">Escolher e testar antes</button>
+      </section>
+
+      <section id="previewStep" hidden>
+        <h2 class="step-title">Confira antes de entrar ao vivo</h2>
+        <div class="preview-wrap">
+          <video id="testPreview" muted playsinline></video>
+          <video id="testCameraPreview" class="camera-preview" muted playsinline hidden></video>
+        </div>
+        <div class="audio-test">
+          <div class="audio-test-head"><strong id="audioTestLabel">Verificando áudio…</strong><span id="audioPercent">0%</span></div>
+          <div class="audio-meter"><i id="audioMeter"></i></div>
+          <p id="audioHelp">Reproduza algum som na fonte escolhida. A barra deve se movimentar.</p>
+        </div>
+        <div class="preview-actions">
+          <button id="chooseAgain" class="secondary">Escolher novamente</button>
+          <button id="goLive" class="primary">Começar transmissão</button>
+        </div>
       </section>
 
       <section id="live" hidden>
@@ -67,6 +108,7 @@
           <div class="live-badge"><span class="dot"></span> No ar</div>
           <div id="audioBadge" class="audio-badge off">Sem áudio</div>
           <div id="cameraBadge" class="audio-badge off">Sem câmera</div>
+          <div id="connectionBadge" class="audio-badge on">Conectado</div>
         </div>
         <div class="preview-wrap">
           <video id="preview" muted playsinline></video>
@@ -90,6 +132,6 @@
       </footer>
     </main>
 
-    <script type="module" src="/share.js?v=12"></script>
+    <script type="module" src="/share.js?v=13"></script>
   </body>
 </html>

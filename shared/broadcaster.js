@@ -68,6 +68,9 @@ export function supportError({ requireChromium = false } = {}) {
  * @param {number} opts.fps
  * @param {boolean} [opts.audio]     capturar também o som do computador
  * @param {boolean} [opts.camera]    mostrar a câmera sobre a tela
+ * @param {string} [opts.cameraDeviceId] câmera preferida
+ * @param {string} [opts.cameraPosition] canto da sobreposição
+ * @param {string} [opts.cameraSize] tamanho da sobreposição
  * @param {(info:object)=>void} [opts.onStatus]  codec/resolução/caminho de captura
  * @param {(stats:object)=>void} [opts.onStats]  viewers, fps, mbps, segundos no ar
  * @param {(reason:string)=>void} [opts.onEnd]   encerrou (por qualquer motivo)
@@ -75,6 +78,8 @@ export function supportError({ requireChromium = false } = {}) {
  * @param {(msg:string)=>void} [opts.onPerformance] ajuste automático de carga
  * @param {(info:object)=>void} [opts.onAudioStatus] estado da captura de som
  * @param {(info:object)=>void} [opts.onCameraStatus] estado da câmera
+ * @param {(info:object)=>void} [opts.onAudioLevel] nível instantâneo do áudio
+ * @param {(info:object)=>void} [opts.onConnectionStatus] estado da conexão
  * @param {(msg:string)=>void} [opts.onError]
  */
 export function createBroadcaster({
@@ -83,6 +88,9 @@ export function createBroadcaster({
   fps,
   audio = false,
   camera = false,
+  cameraDeviceId = '',
+  cameraPosition = 'bottom-right',
+  cameraSize = 'medium',
   onStatus,
   onStats,
   onEnd,
@@ -91,6 +99,8 @@ export function createBroadcaster({
   onPerformance,
   onAudioStatus,
   onCameraStatus,
+  onAudioLevel,
+  onConnectionStatus,
 }) {
   let ws = null;
   let stream = null;
@@ -100,6 +110,9 @@ export function createBroadcaster({
   let audioReader = null;
   let cameraStream = null;
   let cameraVideo = null;
+  let audioContext = null;
+  let audioMeterTimer = null;
+  let audioMeterSource = null;
   // Pediram som, mas a superfície escolhida traria o Discord junto. Guardado
   // para a interface poder oferecer a saída em vez de só avisar e esquecer.
   let somBloqueado = false;
@@ -121,6 +134,10 @@ export function createBroadcaster({
   let droppedFrames = 0;
   let viewers = 0;
   let statsTimer = null;
+  let reconnectTimer = null;
+  let reconnectAttempts = 0;
+  let stopping = false;
+  let lastAudioConfig = null;
 
   // A escolha da pessoa é o teto. O modo adaptativo só desce temporariamente
   // quando o encoder não acompanha e volta a subir depois de estabilizar.
@@ -130,7 +147,8 @@ export function createBroadcaster({
   let overloadedSeconds = 0;
   let stableSeconds = 0;
 
-  async function start() {
+  async function capture() {
+    if (stream?.active) return stream;
     // Precisa vir do gesto do usuário; qualquer await antes disso o invalida.
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: { ideal: fps, max: fps } },
@@ -146,14 +164,42 @@ export function createBroadcaster({
     track.contentHint = 'text';
     track.addEventListener('ended', () => stop('Você parou o compartilhamento pelo navegador.'));
 
-    const s = track.getSettings();
-    const target = fitWithin(s.width ?? 1280, s.height ?? 720);
-
     if (camera) {
       await ligarCamera().catch((err) => {
         onAviso?.(`A tela será transmitida sem câmera: ${cameraError(err)}`);
       });
     }
+
+    const audioTrack = stream.getAudioTracks()[0] ?? null;
+    if (audioTrack) {
+      const surface = track.getSettings?.().displaySurface;
+      const source = surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
+      setupAudioMeter(audioTrack);
+      onAudioStatus?.({ active: true, source, preview: true });
+    } else if (audio) {
+      onAudioStatus?.({ active: false, reason: 'missing', preview: true });
+    }
+
+    return stream;
+  }
+
+  /** Captura sem publicar: usada pela tela de teste antes de entrar ao vivo. */
+  async function prepare() {
+    const prepared = await capture();
+    return {
+      stream: prepared,
+      hasAudio: prepared.getAudioTracks().length > 0,
+      surface: prepared.getVideoTracks()[0]?.getSettings?.().displaySurface ?? 'unknown',
+    };
+  }
+
+  async function start() {
+    stopping = false;
+    await capture();
+    const track = stream.getVideoTracks()[0];
+
+    const s = track.getSettings();
+    const target = fitWithin(s.width ?? 1280, s.height ?? 720);
 
     config = await pickConfig(target.width, target.height);
     if (!config) {
@@ -346,7 +392,12 @@ export function createBroadcaster({
 
     try {
       cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30, max: 30 } },
+        video: {
+          ...(cameraDeviceId ? { deviceId: { exact: cameraDeviceId } } : {}),
+          width: { ideal: 640 },
+          height: { ideal: 360 },
+          frameRate: { ideal: 30, max: 30 },
+        },
         audio: false,
       });
       cameraVideo = document.createElement('video');
@@ -369,7 +420,12 @@ export function createBroadcaster({
       }, { once: true });
       if (srcW && srcH) configureStage(srcW, srcH, targetSize(srcW, srcH));
       wantKeyframe = true;
-      onCameraStatus?.({ active: true });
+      onCameraStatus?.({
+        active: true,
+        deviceId: cameraStream.getVideoTracks()[0]?.getSettings?.().deviceId ?? '',
+        position: cameraPosition,
+        size: cameraSize,
+      });
       return cameraStream;
     } catch (err) {
       cameraStream?.getTracks().forEach((track) => track.stop());
@@ -394,7 +450,58 @@ export function createBroadcaster({
     if (wasActive) onCameraStatus?.({ active: false });
   }
 
+  async function trocarCamera(deviceId) {
+    cameraDeviceId = deviceId || '';
+    desligarCamera();
+    return ligarCamera();
+  }
+
+  function setCameraLayout({ position, size } = {}) {
+    if (['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(position)) {
+      cameraPosition = position;
+    }
+    if (['small', 'medium', 'large'].includes(size)) cameraSize = size;
+    wantKeyframe = true;
+    onCameraStatus?.({
+      active: Boolean(cameraStream),
+      deviceId: cameraStream?.getVideoTracks()[0]?.getSettings?.().deviceId ?? cameraDeviceId,
+      position: cameraPosition,
+      size: cameraSize,
+    });
+  }
+
   // -------------------------------------------------------------------- áudio
+
+  function setupAudioMeter(track) {
+    clearInterval(audioMeterTimer);
+    audioMeterTimer = null;
+    try { audioMeterSource?.disconnect(); } catch {}
+    audioMeterSource = null;
+    if (!onAudioLevel || !track || !window.AudioContext) return;
+
+    try {
+      audioContext ??= new AudioContext();
+      audioContext.resume().catch(() => {});
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.72;
+      audioMeterSource = audioContext.createMediaStreamSource(new MediaStream([track]));
+      audioMeterSource.connect(analyser);
+      const samples = new Uint8Array(analyser.fftSize);
+      audioMeterTimer = setInterval(() => {
+        analyser.getByteTimeDomainData(samples);
+        let energy = 0;
+        for (const sample of samples) {
+          const centered = (sample - 128) / 128;
+          energy += centered * centered;
+        }
+        const rms = Math.sqrt(energy / samples.length);
+        onAudioLevel?.({ level: Math.min(1, rms * 5), silent: rms < 0.004 });
+      }, 100);
+    } catch {
+      onAudioLevel?.({ level: 0, silent: true, unavailable: true });
+    }
+  }
 
   /**
    * Captura, codifica e envia o som.
@@ -410,6 +517,7 @@ export function createBroadcaster({
       return;
     }
 
+    setupAudioMeter(track);
     const s = track.getSettings();
     const sampleRate = s.sampleRate || 48_000;
     const numberOfChannels = Math.min(2, s.channelCount || 2);
@@ -436,9 +544,8 @@ export function createBroadcaster({
     onAudioStatus?.({ active: true, source });
 
     // O mesmo caminho do vídeo: quem chega depois recebe isto ao pedir a tela.
-    ws?.send(
-      JSON.stringify({ type: 'audio-config', config: { codec: 'opus', sampleRate, numberOfChannels } })
-    );
+    lastAudioConfig = { codec: 'opus', sampleRate, numberOfChannels };
+    ws?.send(JSON.stringify({ type: 'audio-config', config: lastAudioConfig }));
 
     audioReader = new MediaStreamTrackProcessor({ track }).readable.getReader();
     while (running) {
@@ -616,13 +723,16 @@ export function createBroadcaster({
   function drawCamera() {
     if (!cameraVideo || cameraVideo.readyState < 2 || !stageCtx) return;
     const margin = Math.max(12, Math.round(stage.width * 0.012));
-    const width = Math.min(Math.round(stage.width * 0.24), 360);
+    const factors = { small: 0.17, medium: 0.24, large: 0.32 };
+    const width = Math.min(Math.round(stage.width * factors[cameraSize]), cameraSize === 'large' ? 480 : 360);
     const ratio = cameraVideo.videoWidth && cameraVideo.videoHeight
       ? cameraVideo.videoWidth / cameraVideo.videoHeight
       : 16 / 9;
     const height = Math.round(width / ratio);
-    const x = stage.width - width - margin;
-    const y = stage.height - height - margin;
+    const right = cameraPosition.endsWith('right');
+    const bottom = cameraPosition.startsWith('bottom');
+    const x = right ? stage.width - width - margin : margin;
+    const y = bottom ? stage.height - height - margin : margin;
     const radius = Math.max(8, Math.round(width * 0.04));
 
     stageCtx.save();
@@ -820,22 +930,34 @@ export function createBroadcaster({
 
   // ---------------------------------------------------------------- websocket
 
-  function connect() {
+  function connect(reconnecting = false) {
     return new Promise((resolve, reject) => {
-      ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
+      socket.binaryType = 'arraybuffer';
+      onConnectionStatus?.({ state: reconnecting ? 'reconnecting' : 'connecting', attempt: reconnectAttempts });
 
       const timeout = setTimeout(() => {
-        ws.close();
+        socket.close();
         reject(new Error('Não foi possível falar com o servidor (timeout).'));
       }, 10_000);
 
-      ws.addEventListener('open', () => {
+      socket.addEventListener('open', () => {
         clearTimeout(timeout);
+        reconnectAttempts = 0;
+        onConnectionStatus?.({ state: 'connected' });
+        if (reconnecting && running) {
+          socket.send(JSON.stringify({ type: 'start' }));
+          if (lastAudioConfig) {
+            socket.send(JSON.stringify({ type: 'audio-config', config: lastAudioConfig }));
+          }
+          wantKeyframe = true;
+          onAviso?.('Conexão recuperada. A transmissão continuou automaticamente.');
+        }
         resolve();
       });
 
-      ws.addEventListener('message', (e) => {
+      socket.addEventListener('message', (e) => {
         if (typeof e.data !== 'string') return;
         const msg = JSON.parse(e.data);
 
@@ -859,16 +981,37 @@ export function createBroadcaster({
         }
       });
 
-      ws.addEventListener('error', () => {
+      socket.addEventListener('error', () => {
         clearTimeout(timeout);
-        reject(new Error('Falha ao conectar no servidor.'));
+        if (!running) reject(new Error('Falha ao conectar no servidor.'));
+        socket.close();
       });
 
-      ws.addEventListener('close', () => {
+      socket.addEventListener('close', () => {
         clearTimeout(timeout);
-        if (running) stop('Conexão com o servidor caiu.');
+        if (ws === socket) ws = null;
+        if (running && !stopping) scheduleReconnect();
       });
     });
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer || stopping || !running) return;
+    reconnectAttempts++;
+    const delay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 10_000);
+    onConnectionStatus?.({ state: 'reconnecting', attempt: reconnectAttempts, delay });
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+      try {
+        await connect(true);
+      } catch {
+        if (reconnectAttempts >= 8) {
+          stop('Não foi possível recuperar a conexão com o servidor.');
+        } else {
+          scheduleReconnect();
+        }
+      }
+    }, delay);
   }
 
   // -------------------------------------------------------------------- parar
@@ -925,7 +1068,8 @@ export function createBroadcaster({
     }
     audioEncoder = null;
     if (novoAudio) {
-      const source = track.getSettings?.().displaySurface === 'browser' ? 'tab' : 'system';
+      const surface = track.getSettings?.().displaySurface;
+      const source = surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
       pumpAudio(novoAudio, source);
     }
     else if (audio) {
@@ -950,7 +1094,14 @@ export function createBroadcaster({
     applyAdaptiveLevel();
   }
 
-  const getSettings = () => ({ bitrate: requestedBitrate, fps: requestedFps, adaptiveLevel });
+  const getSettings = () => ({
+    bitrate: requestedBitrate,
+    fps: requestedFps,
+    adaptiveLevel,
+    cameraPosition,
+    cameraSize,
+    cameraDeviceId,
+  });
 
   function cleanup() {
     stream?.getTracks().forEach((t) => t.stop());
@@ -962,13 +1113,24 @@ export function createBroadcaster({
     srcW = 0;
     srcH = 0;
     desligarCamera();
+    clearInterval(audioMeterTimer);
+    audioMeterTimer = null;
+    try { audioMeterSource?.disconnect(); } catch {}
+    audioMeterSource = null;
+    audioContext?.close().catch(() => {});
+    audioContext = null;
     stage = null;
     stageCtx = null;
   }
 
   function stop(reason) {
     const wasRunning = running;
+    const hadCapture = Boolean(stream || cameraStream);
+    stopping = true;
     running = false;
+
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
 
     clearInterval(statsTimer);
     statsTimer = null;
@@ -987,24 +1149,26 @@ export function createBroadcaster({
     }
     encoder = null;
     audioEncoder = null;
+    lastAudioConfig = null;
 
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'stop' }));
-      ws.close();
-    }
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
+    if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
     ws = null;
 
     cleanup();
-    if (wasRunning) onEnd?.(reason ?? '');
+    if (wasRunning || hadCapture) onEnd?.(reason ?? '');
   }
 
   return {
+    prepare,
     start,
     stop,
     changeScreen,
     trocarSom,
     ligarCamera,
     desligarCamera,
+    trocarCamera,
+    setCameraLayout,
     setQuality,
     getSettings,
     temSom: () => Boolean(audioEncoder),

@@ -782,6 +782,17 @@ button {
   white-space: nowrap;
 }
 
+.connection-pill {
+  margin-left: auto;
+  color: #c5f6d5;
+  border: 1px solid rgba(35, 165, 90, 0.45);
+}
+
+.connection-pill.reconnecting {
+  color: #f8d477;
+  border-color: rgba(240, 178, 50, 0.55);
+}
+
 /* Encostado embaixo, como a barra de controles de uma call. O respiro menor
    embaixo do que em cima é de propósito: a barra pertence à borda da tela. */
 .pill {
@@ -1306,6 +1317,14 @@ button {
   margin-top: 3px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.camera-settings {
+  margin-top: 12px;
+  padding: 12px 12px 1px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #111214;
 }
 
 .modal-note {
