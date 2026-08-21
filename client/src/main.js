@@ -76,6 +76,10 @@ let activeSlot = null;
 let telaCheia = false;
 let fullscreenEnteredAt = 0;
 
+// Alterar este identificador faz o aviso aparecer uma vez novamente para cada
+// pessoa. O conteúdo continua acessível pelo botão Novidades.
+const NEWS_VERSION = '0.5';
+
 // ------------------------------------------------------------------- helpers
 
 let toastTimer = null;
@@ -940,7 +944,11 @@ async function boot() {
   // oferecer uma lista de salas ali seria oferecer uma escolha entre uma opção.
   // No site é o contrário — não há call nenhuma para herdar, então a lista de
   // salas é a única forma de as pessoas se encontrarem.
-  if (inDiscord) return entrarNaCall();
+  if (inDiscord) {
+    await entrarNaCall();
+    showNewsOnce();
+    return;
+  }
 
   // Lido antes de showLobby, que limpa o parâmetro da URL ao voltar ao lobby.
   const alvo = new URLSearchParams(location.search).get('sala');
@@ -948,7 +956,31 @@ async function boot() {
 
   await showLobby();
   if (session && alvo) await joinById(alvo, convite);
+  showNewsOnce();
 }
+
+// --------------------------------------------------------------- novidades
+
+function openNews() {
+  $('newsModal').hidden = false;
+  store('newsSeen', NEWS_VERSION);
+  $('newsClose').focus();
+}
+
+function closeNews() {
+  $('newsModal').hidden = true;
+}
+
+function showNewsOnce() {
+  if (read('newsSeen') !== NEWS_VERSION) openNews();
+}
+
+$('news').addEventListener('click', openNews);
+$('lobbyNews').addEventListener('click', openNews);
+$('newsClose').addEventListener('click', closeNews);
+$('newsModal').addEventListener('click', (event) => {
+  if (event.target === $('newsModal')) closeNews();
+});
 
 /** Abre a sala desta call, criando-a na primeira pessoa que chega. */
 async function entrarNaCall() {
@@ -2087,7 +2119,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
 
   // Fecha o modal aberto mais recente antes de mexer no modo ampliado.
-  for (const id of ['profileModal', 'roomModal', 'joinModal', 'createModal', 'modal']) {
+  for (const id of ['newsModal', 'profileModal', 'roomModal', 'joinModal', 'createModal', 'modal']) {
     if (!$(id).hidden) {
       $(id).hidden = true;
       return;

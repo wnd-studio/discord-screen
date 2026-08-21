@@ -33,6 +33,7 @@
             </div>
           </div>
           <div class="lobby-actions">
+            <button id="lobbyNews" class="btn" title="Ver novidades">Novidades</button>
             <button id="lobbyUser" class="user-chip" title="Seu perfil" hidden></button>
             <button id="loginBtn" class="btn" hidden>Entrar com Discord</button>
             <button id="newRoom" class="btn go">Criar sala</button>
@@ -148,6 +149,17 @@
           </div>
 
           <div class="group">
+            <button
+              id="news"
+              class="btn"
+              data-tip="Novidades"
+              aria-label="Novidades"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 5h16v14H4z" />
+                <path d="M8 9h8M8 13h8M8 17h5" />
+              </svg>
+            </button>
             <button
               id="settings"
               class="btn"
@@ -317,6 +329,38 @@
           <div class="modal-actions">
             <button id="profileCancel" class="btn">Cancelar</button>
             <button id="profileSave" class="btn go">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="newsModal" class="modal" hidden>
+        <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+          <div class="news-kicker">ATUALIZAÇÃO 0.5</div>
+          <h2 id="newsTitle">Novidades no Screen Share</h2>
+          <p class="modal-sub">Melhorias para deixar as transmissões mais completas e fáceis de usar.</p>
+
+          <ul class="news-list">
+            <li>
+              <span class="news-icon">🔊</span>
+              <div><strong>Áudio melhorado</strong><p>Agora tentamos capturar também o áudio de janelas compatíveis, além de abas e do sistema.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">📷</span>
+              <div><strong>Câmera na transmissão</strong><p>Mostre sua câmera no canto da tela e ligue ou desligue sem encerrar a live.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">🔉</span>
+              <div><strong>Controle de volume</strong><p>Cada espectador pode ajustar o volume geral e o volume de cada pessoa.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">⛶</span>
+              <div><strong>Tela cheia</strong><p>Uma visualização mais limpa e imersiva para acompanhar a transmissão.</p></div>
+            </li>
+          </ul>
+
+          <p class="news-footnote">O áudio de uma janela depende do suporte do navegador e do aplicativo selecionado.</p>
+          <div class="modal-actions">
+            <button id="newsClose" class="btn go">Entendi</button>
           </div>
         </div>
       </div>
