@@ -9,7 +9,7 @@
          dos cabeçalhos no-store guardou a versão antiga por heurística do
          navegador, e continuaria usando ela para sempre. Trocar a query força
          uma URL nova. Incremente ao publicar mudanças nesses arquivos. -->
-    <link rel="stylesheet" href="/share.css?v=14" />
+    <link rel="stylesheet" href="/share.css?v=15" />
   </head>
   <body>
     <main class="card">
@@ -22,6 +22,25 @@
       </header>
 
       <section id="setup">
+        <div class="source-picker">
+          <strong>O que você quer transmitir?</strong>
+          <div class="source-buttons" role="group" aria-label="Fonte da transmissão">
+            <button id="sourceScreen" class="source-button selected" type="button">Tela do computador</button>
+            <button id="sourceCamera" class="source-button" type="button">Câmera</button>
+          </div>
+          <p id="sourceHelp">Escolha uma tela, janela ou aba.</p>
+        </div>
+
+        <div id="mobileCameraOptions" class="camera-options" hidden>
+          <div class="row">
+            <label for="mobileFacing">Câmera do celular</label>
+            <select id="mobileFacing">
+              <option value="user">Frontal</option>
+              <option value="environment">Traseira</option>
+            </select>
+          </div>
+        </div>
+
         <div class="row">
           <label for="quality">Qualidade</label>
           <select id="quality">
@@ -45,7 +64,7 @@
 
         <label class="check">
           <input id="withAudio" type="checkbox" />
-          <span>Incluir áudio na transmissão</span>
+          <span id="audioOptionLabel">Incluir áudio na transmissão</span>
         </label>
 
         <label class="check">
@@ -122,16 +141,17 @@
         </div>
         <button id="somAba" class="secondary" hidden>Trocar fonte do áudio</button>
         <button id="cameraToggle" class="secondary">Ligar câmera</button>
+        <button id="switchMobileCamera" class="secondary" hidden>Trocar câmera</button>
         <button id="stop" class="danger">Parar de transmitir</button>
       </section>
 
       <p id="status" class="status" role="status"></p>
 
       <footer>
-        <p>Mantenha esta aba aberta enquanto transmite. Você pode voltar para o Discord — a transmissão continua.</p>
+        <p id="keepOpenNote">Mantenha esta aba aberta enquanto transmite. Você pode voltar para o Discord — a transmissão continua.</p>
       </footer>
     </main>
 
-    <script type="module" src="/share.js?v=13"></script>
+    <script type="module" src="/share.js?v=15"></script>
   </body>
 </html>

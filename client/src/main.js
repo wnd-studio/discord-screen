@@ -9,6 +9,7 @@ const params = new URLSearchParams(location.search);
 // O Discord injeta frame_id/instance_id na URL do iframe. Sem eles, estamos
 // rodando direto no navegador — modo de desenvolvimento.
 const inDiscord = params.has('frame_id');
+const mobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
 // Dentro da Activity todo tráfego precisa passar pelo proxy do Discord.
 const P = inDiscord ? '/.proxy' : '';
@@ -1755,17 +1756,32 @@ function openModal(mode) {
   modalMode = mode;
   const live = mode === 'live';
 
-  $('modalTitle').textContent = live ? 'Ajustes da transmissão' : 'Compartilhar sua tela';
+  $('modalTitle').textContent = live ? 'Ajustes da transmissão' : mobileDevice ? 'Compartilhar sua câmera' : 'Compartilhar sua tela';
   $('modalSub').textContent = live
     ? 'Vale na hora, sem derrubar quem está assistindo.'
-    : 'Escolha a tela e comece a transmitir.';
-  $('modalGo').textContent = live ? 'Aplicar' : 'Compartilhar tela';
+    : mobileDevice ? 'Use a câmera e o microfone do celular, sem instalar nada.' : 'Escolha a tela e comece a transmitir.';
+  $('modalGo').textContent = live ? 'Aplicar' : mobileDevice ? 'Compartilhar câmera' : 'Compartilhar tela';
   $('modalSwap').hidden = !live;
   $('modalNote').hidden = live;
 
   if (!live) {
     $('mCameraPosition').value = read('cameraPosition') || 'bottom-right';
     $('mCameraSize').value = read('cameraSize') || 'medium';
+    if (mobileDevice) {
+      $('mQuality').value = '1000000';
+      $('mFps').value = '30';
+      $('mAudio').checked = true;
+    }
+  }
+
+  $('mCamera').closest('.field-check').hidden = mobileDevice;
+  $('mFacingField').hidden = !mobileDevice;
+  if (mobileDevice && !live) $('mCamera').checked = false;
+  const audioDescription = $('mAudio').closest('.field-check').querySelector('em');
+  if (mobileDevice && !live) {
+    $('mAudio').closest('.field-check').querySelector('span').childNodes[0].textContent = 'Usar o microfone ';
+    audioDescription.textContent = 'O navegador pedirá sua autorização antes de abrir o microfone.';
+    $('modalNote').textContent = 'A câmera abrirá no navegador. Mantenha a página aberta durante a transmissão.';
   }
 
   $('modalSom').hidden = !live || !myBroadcast;
@@ -1776,6 +1792,7 @@ function openModal(mode) {
     $('mCamera').checked = myBroadcast.temCamera();
 
     const s = myBroadcast.getSettings();
+    if (mobileDevice) $('mFacing').value = s.facingMode || 'user';
     $('mQuality').value = String(s.bitrate);
     $('mFps').value = String(s.fps);
     $('mCameraPosition').value = s.cameraPosition;
@@ -1858,7 +1875,10 @@ const closeModal = () => {
  * tenha visto a janela e clicado.
  */
 async function broadcastFromHere() {
-  if (!navigator.mediaDevices?.getDisplayMedia || !window.VideoEncoder) return false;
+  const captureAvailable = mobileDevice
+    ? navigator.mediaDevices?.getUserMedia
+    : navigator.mediaDevices?.getDisplayMedia;
+  if (!captureAvailable || !window.VideoEncoder) return false;
 
   if (!roomTokens) return false;
   const shareToken = new URL(roomTokens.shareUrl).searchParams.get('t');
@@ -1871,7 +1891,9 @@ async function broadcastFromHere() {
     bitrate: Number($('mQuality').value),
     fps: Number($('mFps').value),
     audio: $('mAudio').checked,
-    camera: $('mCamera').checked,
+    camera: mobileDevice ? false : $('mCamera').checked,
+    captureMode: mobileDevice ? 'camera' : 'screen',
+    facingMode: $('mFacing').value,
     cameraPosition: $('mCameraPosition').value,
     cameraSize: $('mCameraSize').value,
     onAviso: (m) => toast(m, true),
@@ -1911,6 +1933,10 @@ $('modalGo').addEventListener('click', async () => {
   // Ajuste no ar: aplica e fecha, sem tocar na captura.
   if (modalMode === 'live') {
     try {
+      const current = myBroadcast?.getSettings();
+      if (mobileDevice && current?.captureMode === 'camera' && current.facingMode !== $('mFacing').value) {
+        await myBroadcast.trocarCameraPrincipal($('mFacing').value);
+      }
       const wantsCamera = $('mCamera').checked;
       if (wantsCamera && !myBroadcast?.temCamera()) await myBroadcast?.ligarCamera();
       if (!wantsCamera && myBroadcast?.temCamera()) myBroadcast.desligarCamera();
@@ -1951,6 +1977,7 @@ $('modalGo').addEventListener('click', async () => {
   url.searchParams.set('cam', $('mCamera').checked ? '1' : '0');
   url.searchParams.set('camPos', $('mCameraPosition').value);
   url.searchParams.set('camSize', $('mCameraSize').value);
+  if (mobileDevice) url.searchParams.set('source', 'camera');
   store('cameraPosition', $('mCameraPosition').value);
   store('cameraSize', $('mCameraSize').value);
 

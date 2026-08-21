@@ -18,6 +18,10 @@ const token = query.get('t');
 let broadcaster = null;
 let audioWasDetected = false;
 let connectionState = 'idle';
+const mobileDevice = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+let captureMode = query.get('source') === 'camera' || mobileDevice || !navigator.mediaDevices?.getDisplayMedia ? 'camera' : 'screen';
+let facingMode = 'user';
+let wakeLock = null;
 
 function browserGuidance() {
   const ua = navigator.userAgent;
@@ -51,7 +55,9 @@ function fail(title, msg) {
 
 function readTokenPayload() {
   try {
-    return JSON.parse(atob(token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/')));
+    const binary = atob(token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
   }
@@ -60,7 +66,7 @@ function readTokenPayload() {
 // ------------------------------------------------------------------ arranque
 
 const payload = token && readTokenPayload();
-const missing = supportError();
+const missing = supportError(captureMode);
 
 if (!payload) {
   fail('Link inválido.', 'Volte à atividade no Discord e clique em compartilhar novamente.');
@@ -77,6 +83,50 @@ if (!payload) {
   $('goLive').addEventListener('click', goLive);
   $('chooseAgain').addEventListener('click', chooseAgain);
   $('stop').addEventListener('click', () => broadcaster?.stop('Transmissão encerrada.'));
+  selectSource(captureMode);
+}
+
+$('sourceScreen').addEventListener('click', () => selectSource('screen'));
+$('sourceCamera').addEventListener('click', () => selectSource('camera'));
+$('mobileFacing').addEventListener('change', () => {
+  facingMode = $('mobileFacing').value;
+  updatePrimaryPreviewMirror();
+});
+
+function selectSource(mode) {
+  if (mode === 'screen' && !navigator.mediaDevices?.getDisplayMedia) {
+    setStatus('Este celular não permite transmitir a tela pelo navegador. Use a câmera.', 'aviso');
+    return;
+  }
+  captureMode = mode;
+  $('sourceScreen').classList.toggle('selected', mode === 'screen');
+  $('sourceCamera').classList.toggle('selected', mode === 'camera');
+  $('sourceScreen').disabled = !navigator.mediaDevices?.getDisplayMedia;
+  $('mobileCameraOptions').hidden = mode !== 'camera';
+  $('withCamera').closest('.check').hidden = mode === 'camera';
+  $('cameraOptions').hidden = mode === 'camera' || !$('withCamera').checked;
+  $('withCamera').checked = mode === 'camera' ? false : $('withCamera').checked;
+  $('audioOptionLabel').textContent = mode === 'camera' ? 'Incluir microfone na transmissão' : 'Incluir áudio na transmissão';
+  document.querySelector('h1').textContent = mode === 'camera' ? 'Compartilhar câmera' : 'Compartilhar tela';
+  $('sourceHelp').textContent = mode === 'camera'
+    ? 'Transmita sua câmera e, se quiser, o microfone. Não é necessário instalar nada.'
+    : 'Escolha uma tela, janela ou aba do computador.';
+  $('browserNote').innerHTML = mode === 'camera'
+    ? 'O navegador pedirá acesso à câmera e ao microfone. No celular, mantenha esta página aberta durante a transmissão.'
+    : browserGuidance();
+  $('keepOpenNote').textContent = mode === 'camera' && mobileDevice
+    ? 'Mantenha esta página visível durante a transmissão. O celular pode pausar a câmera ao trocar de aplicativo ou bloquear a tela.'
+    : 'Mantenha esta aba aberta enquanto transmite. Você pode voltar para o Discord — a transmissão continua.';
+  $('start').textContent = mode === 'camera' ? 'Testar câmera antes' : 'Escolher e testar antes';
+  if (mode === 'camera' && mobileDevice && !query.has('q')) $('quality').value = '1000000';
+  $('cameraToggle').hidden = mode === 'camera';
+  $('switchMobileCamera').hidden = true;
+  updatePrimaryPreviewMirror();
+}
+
+function updatePrimaryPreviewMirror() {
+  const mirrored = captureMode === 'camera' && facingMode === 'user';
+  for (const id of ['testPreview', 'preview']) $(id).classList.toggle('mirrored', mirrored);
 }
 
 $('withCamera').addEventListener('change', () => {
@@ -116,7 +166,7 @@ function applyPresets() {
   if (q) $('quality').value = q;
   if (fps) $('fps').value = fps;
 
-  for (const row of document.querySelectorAll('#setup .row')) row.hidden = true;
+  for (const row of document.querySelectorAll('#setup > .row')) row.hidden = true;
 
   const mbps = (Number($('quality').value) / 1e6).toFixed(1).replace('.', ',');
   const comSom = $('withAudio').checked ? ' · com som' : '';
@@ -129,7 +179,7 @@ function applyPresets() {
 
 async function start() {
   $('start').disabled = true;
-  setStatus('Aguardando você escolher a tela…');
+  setStatus(captureMode === 'camera' ? 'Aguardando permissão para usar a câmera…' : 'Aguardando você escolher a tela…');
   audioWasDetected = false;
   broadcaster = buildBroadcaster();
 
@@ -158,6 +208,8 @@ function buildBroadcaster() {
     fps: Number($('fps').value),
     audio: $('withAudio').checked,
     camera: $('withCamera').checked,
+    captureMode,
+    facingMode,
     cameraDeviceId: $('cameraDevice').value,
     cameraPosition: $('cameraPosition').value,
     cameraSize: $('cameraSize').value,
@@ -207,14 +259,16 @@ function buildBroadcaster() {
       badge.classList.toggle('off', !active);
       badge.classList.toggle('on', active);
       badge.textContent = active
-        ? source === 'tab'
+        ? source === 'microphone'
+          ? 'Microfone ativo'
+          : source === 'tab'
           ? 'Áudio da aba ativo'
           : source === 'window'
             ? 'Áudio da janela ativo'
             : 'Áudio do sistema ativo'
         : 'Sem áudio';
       // Mesmo sem áudio inicial, a pessoa consegue corrigir sem reiniciar vídeo.
-      $('somAba').hidden = active && source === 'tab';
+      $('somAba').hidden = captureMode === 'camera' || (active && source === 'tab');
     },
     onCameraStatus: ({ active }) => {
       const badge = $('cameraBadge');
@@ -235,6 +289,7 @@ function buildBroadcaster() {
       if (active) loadCameras();
     },
     onEnd: (reason) => {
+      releaseWakeLock();
       broadcaster = null;
       $('preview').srcObject = null;
       $('cameraPreview').srcObject = null;
@@ -263,6 +318,12 @@ async function goLive() {
     $('live').insertBefore($('cameraOptions'), $('cameraToggle'));
     $('live').insertBefore(document.querySelector('.audio-test'), document.querySelector('.stats'));
     setStatus('Transmissão iniciada.', 'ok');
+    await keepScreenAwake();
+    $('cameraBadge').textContent = captureMode === 'camera' ? 'Câmera ativa' : $('cameraBadge').textContent;
+    $('cameraBadge').classList.toggle('on', captureMode === 'camera');
+    $('cameraBadge').classList.toggle('off', captureMode !== 'camera');
+    $('cameraToggle').hidden = captureMode === 'camera';
+    $('switchMobileCamera').hidden = captureMode !== 'camera';
   } catch (err) {
     broadcaster?.stop();
     broadcaster = null;
@@ -297,6 +358,7 @@ function setAudioTest(level, label, help) {
 }
 
 function audioMissingHelp(surface) {
+  if (surface === 'camera') return 'Autorize o microfone junto com a câmera ou transmita somente o vídeo.';
   if (surface === 'window') return 'Essa janela não forneceu áudio. Tente outra janela compatível ou use uma aba do navegador.';
   if (surface === 'browser') return 'Escolha novamente a aba e marque “Compartilhar áudio da guia”.';
   return 'Escolha novamente e ative “Compartilhar áudio”. Se não aparecer, tente uma aba do navegador.';
@@ -352,6 +414,27 @@ $('cameraToggle').addEventListener('click', async () => {
   }
 });
 
+$('switchMobileCamera').addEventListener('click', async () => {
+  if (!broadcaster || captureMode !== 'camera') return;
+  const next = facingMode === 'user' ? 'environment' : 'user';
+  $('switchMobileCamera').disabled = true;
+  try {
+    const fresh = await broadcaster.trocarCameraPrincipal(next);
+    facingMode = next;
+    $('mobileFacing').value = facingMode;
+    for (const id of ['preview', 'testPreview']) {
+      $(id).srcObject = fresh;
+      $(id).play().catch(() => {});
+    }
+    updatePrimaryPreviewMirror();
+    setStatus(facingMode === 'user' ? 'Câmera frontal ativa.' : 'Câmera traseira ativa.', 'ok');
+  } catch (err) {
+    setStatus(`Não foi possível trocar a câmera: ${friendlyError(err)}`, 'error');
+  } finally {
+    $('switchMobileCamera').disabled = false;
+  }
+});
+
 $('cameraDevice').addEventListener('change', async () => {
   if (!broadcaster?.temCamera()) return;
   try {
@@ -372,4 +455,24 @@ for (const id of ['cameraPosition', 'cameraSize']) {
   });
 }
 
-window.addEventListener('beforeunload', () => broadcaster?.stop());
+async function keepScreenAwake() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; }, { once: true });
+  } catch {}
+}
+
+function releaseWakeLock() {
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && broadcaster?.isRunning()) keepScreenAwake();
+});
+
+window.addEventListener('beforeunload', () => {
+  releaseWakeLock();
+  broadcaster?.stop();
+});

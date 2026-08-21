@@ -55,8 +55,11 @@ function fitWithin(w, h) {
 }
 
 /** Motivo pelo qual este navegador não consegue transmitir, ou null. */
-export function supportError() {
-  if (!navigator.mediaDevices?.getDisplayMedia) {
+export function supportError(captureMode = 'screen') {
+  if (captureMode === 'camera' && !navigator.mediaDevices?.getUserMedia) {
+    return 'Este navegador não permite usar a câmera.';
+  }
+  if (captureMode !== 'camera' && !navigator.mediaDevices?.getDisplayMedia) {
     return 'Este navegador não permite captura de tela. Navegador de celular não suporta captura — use um desktop.';
   }
   if (!window.VideoEncoder || !window.VideoFrame || !window.EncodedVideoChunk) {
@@ -82,6 +85,8 @@ export function compatibilityInfo() {
  * @param {number} opts.fps
  * @param {boolean} [opts.audio]     capturar também o som do computador
  * @param {boolean} [opts.camera]    mostrar a câmera sobre a tela
+ * @param {'screen'|'camera'} [opts.captureMode] fonte principal do vídeo
+ * @param {'user'|'environment'} [opts.facingMode] câmera frontal ou traseira
  * @param {string} [opts.cameraDeviceId] câmera preferida
  * @param {string} [opts.cameraPosition] canto da sobreposição
  * @param {string} [opts.cameraSize] tamanho da sobreposição
@@ -102,6 +107,8 @@ export function createBroadcaster({
   fps,
   audio = false,
   camera = false,
+  captureMode = 'screen',
+  facingMode = 'user',
   cameraDeviceId = '',
   cameraPosition = 'bottom-right',
   cameraSize = 'medium',
@@ -167,22 +174,34 @@ export function createBroadcaster({
 
   async function capture() {
     if (stream?.active) return stream;
-    // Precisa vir do gesto do usuário; qualquer await antes disso o invalida.
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: fps, max: fps } },
-      audio: audio ? audioConstraints() : false,
-      // Estes são hints de DisplayMediaStreamOptions (nível superior), não
-      // restrições da faixa de áudio. Dentro de `audio` o Chromium os ignorava.
-      ...(audio ? { systemAudio: 'include', windowAudio: 'window' } : {}),
-    });
+    if (captureMode === 'camera') {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: Math.min(fps, 30), max: Math.min(fps, 30) },
+        },
+        audio: audio ? microphoneConstraints() : false,
+      });
+    } else {
+      // Precisa vir do gesto do usuário; qualquer await antes disso o invalida.
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: fps, max: fps } },
+        audio: audio ? audioConstraints() : false,
+        // Estes são hints de DisplayMediaStreamOptions (nível superior), não
+        // restrições da faixa de áudio. Dentro de `audio` o Chromium os ignorava.
+        ...(audio ? { systemAudio: 'include', windowAudio: 'window' } : {}),
+      });
+    }
 
     const track = stream.getVideoTracks()[0];
     // Diz ao encoder que o conteúdo é tela (texto/UI), não vídeo natural —
     // preserva nitidez das bordas em vez de suavizar.
-    track.contentHint = 'text';
-    track.addEventListener('ended', () => stop('Você parou o compartilhamento pelo navegador.'));
+    track.contentHint = captureMode === 'camera' ? 'motion' : 'text';
+    track.addEventListener('ended', () => stop(captureMode === 'camera' ? 'A câmera foi encerrada.' : 'Você parou o compartilhamento pelo navegador.'));
 
-    if (camera) {
+    if (camera && captureMode !== 'camera') {
       await ligarCamera().catch((err) => {
         onAviso?.(`A tela será transmitida sem câmera: ${cameraError(err)}`);
       });
@@ -191,7 +210,7 @@ export function createBroadcaster({
     const audioTrack = stream.getAudioTracks()[0] ?? null;
     if (audioTrack) {
       const surface = track.getSettings?.().displaySurface;
-      const source = surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
+      const source = captureMode === 'camera' ? 'microphone' : surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
       setupAudioMeter(audioTrack);
       onAudioStatus?.({ active: true, source, preview: true });
     } else if (audio) {
@@ -207,7 +226,7 @@ export function createBroadcaster({
     return {
       stream: prepared,
       hasAudio: prepared.getAudioTracks().length > 0,
-      surface: prepared.getVideoTracks()[0]?.getSettings?.().displaySurface ?? 'unknown',
+      surface: captureMode === 'camera' ? 'camera' : prepared.getVideoTracks()[0]?.getSettings?.().displaySurface ?? 'unknown',
     };
   }
 
@@ -273,7 +292,7 @@ export function createBroadcaster({
     const audioTrack = prepararSom(track, stream);
     if (audioTrack) {
       const surface = track.getSettings?.().displaySurface;
-      const source = surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
+      const source = captureMode === 'camera' ? 'microphone' : surface === 'browser' ? 'tab' : surface === 'window' ? 'window' : 'system';
       pumpAudio(audioTrack, source);
     }
     else if (audio) {
@@ -329,6 +348,10 @@ export function createBroadcaster({
   function prepararSom(videoTrack, capturado) {
     const faixa = capturado.getAudioTracks()[0];
     if (!faixa) return null;
+
+    // No modo câmera, a faixa é o microfone. Os avisos abaixo tratam somente
+    // do áudio associado a uma captura de tela.
+    if (captureMode === 'camera') return faixa;
 
     const superficie = videoTrack.getSettings?.().displaySurface;
     somBloqueado = false;
@@ -394,6 +417,15 @@ export function createBroadcaster({
     }
     pumpAudio(faixa, source);
     return faixa;
+  }
+
+  function microphoneConstraints() {
+    return {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      channelCount: { ideal: 1 },
+    };
   }
 
   // ------------------------------------------------------------------- câmera
@@ -1173,6 +1205,53 @@ export function createBroadcaster({
     applyAdaptiveLevel();
   }
 
+  /** Troca entre a câmera frontal e traseira sem encerrar a sala. */
+  async function trocarCameraPrincipal(nextFacingMode) {
+    if (captureMode !== 'camera') throw new Error('A câmera não é a fonte principal desta transmissão.');
+    const requestedFacingMode = nextFacingMode === 'environment' ? 'environment' : 'user';
+    const fresh = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: requestedFacingMode },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
+        frameRate: { ideal: Math.min(fps, 30), max: Math.min(fps, 30) },
+      },
+      audio: audio ? microphoneConstraints() : false,
+    });
+    facingMode = requestedFacingMode;
+
+    const previous = stream;
+    const previousReader = reader;
+    stream = fresh;
+    const track = fresh.getVideoTracks()[0];
+    track.contentHint = 'motion';
+    track.addEventListener('ended', () => stop('A câmera foi encerrada.'));
+
+    reader = null;
+    await previousReader?.cancel().catch(() => {});
+    previous?.getTracks().forEach((item) => item.stop());
+    srcW = 0;
+    srcH = 0;
+    wantKeyframe = true;
+    if (video) {
+      video.srcObject = fresh;
+      video.play().catch(() => {});
+    } else {
+      pumpDirect(track);
+    }
+
+    await audioReader?.cancel().catch(() => {});
+    audioReader = null;
+    stopAudioCompatibilityCapture();
+    if (audioEncoder?.state === 'configured') {
+      try { audioEncoder.close(); } catch {}
+    }
+    audioEncoder = null;
+    const microphone = fresh.getAudioTracks()[0];
+    if (microphone) pumpAudio(microphone, 'microphone');
+    return fresh;
+  }
+
   const getSettings = () => ({
     bitrate: requestedBitrate,
     fps: requestedFps,
@@ -1180,6 +1259,8 @@ export function createBroadcaster({
     cameraPosition,
     cameraSize,
     cameraDeviceId,
+    captureMode,
+    facingMode,
   });
 
   function cleanup() {
@@ -1244,6 +1325,7 @@ export function createBroadcaster({
     start,
     stop,
     changeScreen,
+    trocarCameraPrincipal,
     trocarSom,
     ligarCamera,
     desligarCamera,
@@ -1254,6 +1336,7 @@ export function createBroadcaster({
     temSom: () => Boolean(audioEncoder),
     temCamera: () => Boolean(cameraStream),
     getCameraStream: () => cameraStream,
+    getPrimaryStream: () => stream,
     somBloqueado: () => somBloqueado,
     isRunning: () => running,
   };

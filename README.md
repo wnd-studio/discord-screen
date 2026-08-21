@@ -112,6 +112,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Changelogs enviados pelo bot | ✅ Canal escolhido em página, sem comandos |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Modo compatível para Firefox e Safari desktop | ✅ Codec e captura selecionados automaticamente |
+| Transmissão móvel de câmera e microfone | ✅ Pelo navegador, com câmera frontal/traseira e sem instalação |
 | Áudio de abas, sistema ou janelas compatíveis | ✅ Opus; disponibilidade depende do navegador e da fonte |
 | Múltiplos transmissores | ✅ Até 4 por sala |
 | Espectadores | ✅ Limite de segurança de 50 por sala |
@@ -182,6 +183,7 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - A transmissão utiliza relay WebSocket, e não uma infraestrutura WebRTC/SFU. Cada espectador aumenta o tráfego de saída da sala.
 - O plano gratuito da Cloudflare possui cotas diárias. O aplicativo pode ficar publicado continuamente, mas transmissões intensas ou várias salas ativas por muitas horas podem consumir a cota.
 - Captura e reprodução dependem do suporte a WebCodecs. Chrome/Edge usam o caminho otimizado; Firefox/Safari desktop usam um caminho compatível quando necessário. Navegadores antigos continuam sem suporte.
+- No celular, o navegador pode transmitir câmera e microfone. A tela inteira e outros aplicativos continuam indisponíveis sem um aplicativo nativo, por limitação do Android/iOS e dos navegadores móveis.
 - O aplicativo tenta recuperar interrupções curtas automaticamente; falhas prolongadas ainda podem exigir que o compartilhamento seja iniciado novamente.
 - O limite atual é de quatro transmissores e cinquenta espectadores conectados por sala.
 - A remoção feita pelo dono vale enquanto a sala existir; a administração também pode aplicar bloqueios persistentes a usuários ou servidores.
