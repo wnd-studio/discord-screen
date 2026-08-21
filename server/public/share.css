@@ -26,10 +26,12 @@ body {
   background: var(--bg);
   color: var(--text);
   font: 15px/1.5 "gg sans", "Segoe UI", system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
 .card {
   width: 100%;
+  min-width: 0;
   max-width: 520px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -196,15 +198,27 @@ button:disabled {
 
 .preview-wrap {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 8px;
 }
 
-.preview-wrap > #preview {
+.preview-wrap > video:not(.camera-preview) {
+  display: block;
   width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 280px;
   aspect-ratio: 16 / 9;
   background: #000;
   border-radius: 8px;
   border: 1px solid var(--line);
   object-fit: contain;
+}
+
+#previewStep .preview-wrap {
+  max-height: 280px;
 }
 
 .camera-preview {
