@@ -385,25 +385,47 @@ async function discordEvents(request, env) {
 async function changelogApi(request, env, url, data) {
   const setupToken = request.method === 'GET' ? url.searchParams.get('s') : data.setupToken;
   const setup = await verifyToken(setupToken, env.SESSION_SECRET);
-  if (setup?.scope !== 'changelog-setup' || !setup.guild || !setup.uid) {
+  const allowedGuilds = [...new Set([
+    ...(Array.isArray(setup?.guilds) ? setup.guilds : []),
+    setup?.guild,
+  ].filter(Boolean).map(String))];
+  if (setup?.scope !== 'changelog-setup' || !allowedGuilds.length || !setup.uid) {
     return error('Esta configuração expirou. Instale novamente para continuar.', 401);
   }
   if (!env.DISCORD_BOT_TOKEN) return error('O bot ainda não foi configurado pelo proprietário.', 503);
 
-  const [guildResult, channelsResult] = await Promise.all([
-    discordBot(env, `/guilds/${encodeURIComponent(setup.guild)}`),
-    discordBot(env, `/guilds/${encodeURIComponent(setup.guild)}/channels`),
-  ]);
-  if (!guildResult.ok || !channelsResult.ok || !Array.isArray(channelsResult.data)) {
+  const botGuildsResult = await discordBot(env, '/users/@me/guilds');
+  const botGuilds = Array.isArray(botGuildsResult.data)
+    ? botGuildsResult.data.filter((guild) => allowedGuilds.includes(String(guild.id)))
+    : [];
+  const requestedGuild = String(
+    request.method === 'GET' ? url.searchParams.get('guild') || '' : data.guildId || ''
+  );
+  const guildId = requestedGuild || (botGuilds.length === 1 ? String(botGuilds[0].id) : '');
+
+  if (request.method === 'GET' && !guildId) {
+    return json({ guilds: botGuilds.map((guild) => ({ id: guild.id, name: guild.name })), channels: [] });
+  }
+  if (!allowedGuilds.includes(guildId) || !botGuilds.some((guild) => String(guild.id) === guildId)) {
+    return error('Escolha um servidor válido onde o aplicativo esteja instalado.', 403);
+  }
+
+  const channelsResult = await discordBot(env, `/guilds/${encodeURIComponent(guildId)}/channels`);
+  if (!channelsResult.ok || !Array.isArray(channelsResult.data)) {
     return error('Não foi possível acessar os canais. Confira se o aplicativo continua instalado.', 403);
   }
+  const guild = botGuilds.find((item) => String(item.id) === guildId);
   const channels = channelsResult.data
     .filter((channel) => [0, 5].includes(channel.type))
     .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
     .map((channel) => ({ id: channel.id, name: channel.name, type: channel.type }));
 
   if (request.method === 'GET') {
-    return json({ guild: { id: guildResult.data.id, name: guildResult.data.name }, channels });
+    return json({
+      guild: { id: guild.id, name: guild.name },
+      guilds: botGuilds.map((item) => ({ id: item.id, name: item.name })),
+      channels,
+    });
   }
   if (request.method !== 'POST') return error('Método inválido.', 405);
 
@@ -426,13 +448,13 @@ async function changelogApi(request, env, url, data) {
     );
   }
   await internal(registry(env), '/changelog/configure', {
-    guildId: setup.guild,
-    guildName: guildResult.data.name,
+    guildId,
+    guildName: guild.name,
     channelId: channel.id,
     channelName: channel.name,
     configuredBy: setup.uid,
   });
-  return json({ ok: true, guildName: guildResult.data.name, channelName: channel.name });
+  return json({ ok: true, guildName: guild.name, channelName: channel.name });
 }
 
 async function api(request, env, url) {
@@ -728,21 +750,29 @@ async function oauth(request, env, url) {
   }
 
   if (installFlow) {
-    const guildId = String(token.guild?.id || url.searchParams.get('guild_id') || '');
+    const hintedGuildId = String(token.guild?.id || url.searchParams.get('guild_id') || '');
     const guilds = await fetch('https://discord.com/api/users/@me/guilds', {
       headers: { authorization: `Bearer ${token.access_token}` },
     }).then((response) => response.ok ? response.json() : []).catch(() => []);
-    const guild = guilds.find((item) => item.id === guildId);
-    let canManage = false;
-    try {
-      const permissions = BigInt(guild?.permissions || '0');
-      canManage = Boolean(permissions & 8n) || Boolean(permissions & 32n);
-    } catch {}
-    if (!guildId || !guild || !canManage) {
+    const manageableGuilds = guilds.filter((guild) => {
+      try {
+        const permissions = BigInt(guild?.permissions || '0');
+        return Boolean(permissions & 8n) || Boolean(permissions & 32n);
+      } catch { return false; }
+    });
+    const botGuildsResult = await discordBot(env, '/users/@me/guilds');
+    const botGuildIds = new Set(
+      Array.isArray(botGuildsResult.data) ? botGuildsResult.data.map((guild) => String(guild.id)) : []
+    );
+    let candidates = manageableGuilds.filter((guild) => botGuildIds.has(String(guild.id)));
+    if (hintedGuildId && candidates.some((guild) => String(guild.id) === hintedGuildId)) {
+      candidates = candidates.filter((guild) => String(guild.id) === hintedGuildId);
+    }
+    if (!candidates.length) {
       return Response.redirect(`${origin}/changelog/setup?erro=sem_permissao`, 302);
     }
     const setup = await signToken(
-      { scope: 'changelog-setup', uid: me.id, guild: guildId },
+      { scope: 'changelog-setup', uid: me.id, guilds: candidates.slice(0, 50).map((guild) => String(guild.id)) },
       env.SESSION_SECRET,
       CHANGELOG_SETUP_TTL
     );

@@ -30,20 +30,50 @@ async function start() {
   if (namedError || !setupToken) return fail(errors[namedError] || 'Este link expirou. Instale novamente para continuar.');
   try {
     const data = await request(`/api/changelog/channels?s=${encodeURIComponent(setupToken)}`);
-    if (!data.channels?.length) return fail('Não encontramos um canal de texto acessível nesse servidor.');
-    $('guildLine').textContent = `Escolha onde o servidor “${data.guild.name}” receberá as atualizações.`;
-    $('channel').replaceChildren(...data.channels.map((channel) => {
-      const option = document.createElement('option');
-      option.value = channel.id;
-      option.textContent = `# ${channel.name}`;
-      return option;
-    }));
+    if (data.guilds?.length > 1 && !data.guild) {
+      $('guild').replaceChildren(...data.guilds.map((guild) => {
+        const option = document.createElement('option');
+        option.value = guild.id;
+        option.textContent = guild.name;
+        return option;
+      }));
+      $('guildLabel').hidden = false;
+      $('guild').hidden = false;
+      await loadGuild($('guild').value);
+    } else {
+      showGuild(data);
+    }
     $('loading').hidden = true;
     $('form').hidden = false;
   } catch (problem) {
     fail(problem.message);
   }
 }
+
+function showGuild(data) {
+  if (!data.guild) throw new Error('Não encontramos um servidor administrável onde o aplicativo esteja instalado.');
+  if (!data.channels?.length) throw new Error('Não encontramos um canal de texto acessível nesse servidor.');
+  $('guild').value = data.guild.id;
+  $('guildLine').textContent = `Escolha onde o servidor “${data.guild.name}” receberá as atualizações.`;
+  $('channel').replaceChildren(...data.channels.map((channel) => {
+    const option = document.createElement('option');
+    option.value = channel.id;
+    option.textContent = `# ${channel.name}`;
+    return option;
+  }));
+}
+
+async function loadGuild(guildId) {
+  $('channel').disabled = true;
+  try {
+    const data = await request(`/api/changelog/channels?s=${encodeURIComponent(setupToken)}&guild=${encodeURIComponent(guildId)}`);
+    showGuild(data);
+  } finally {
+    $('channel').disabled = false;
+  }
+}
+
+$('guild').addEventListener('change', () => loadGuild($('guild').value).catch((problem) => fail(problem.message)));
 
 $('confirm').addEventListener('click', async () => {
   $('confirm').disabled = true;
@@ -53,7 +83,7 @@ $('confirm').addEventListener('click', async () => {
     const data = await request('/api/changelog/configure', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ setupToken, channelId: $('channel').value }),
+      body: JSON.stringify({ setupToken, guildId: $('guild').value, channelId: $('channel').value }),
     });
     $('form').hidden = true;
     $('success').hidden = false;
