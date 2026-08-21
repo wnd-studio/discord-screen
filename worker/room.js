@@ -338,6 +338,10 @@ export class Room extends DurableObject {
       }
       this.save(ws, a);
       safeSend(ws, JSON.stringify({ type: 'audio-only', slot: msg.slot, enabled: Boolean(msg.enabled) }));
+    } else if (msg.type === 'request-keyframe' && Number.isInteger(msg.slot) && a.watching.includes(msg.slot)) {
+      const broadcaster = this.broadcasters().find(({ a: ba }) => ba.slot === msg.slot && ba.streaming);
+      if (!broadcaster || (a.audioOnly ?? []).includes(msg.slot)) return;
+      safeSend(broadcaster.ws, JSON.stringify({ type: 'need-keyframe' }));
     } else if (msg.type === 'stop-broadcast') {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.uid === a.uid);
       if (broadcaster) safeSend(broadcaster.ws, JSON.stringify({ type: 'stop-request' }));

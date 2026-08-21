@@ -187,6 +187,12 @@ const resumeKeyframe = waitJson(broadcaster, 'need-keyframe');
 viewer.send(JSON.stringify({ type: 'audio-only', slot, enabled: false }));
 await Promise.all([videoResumed, resumeKeyframe]);
 
+// Se o primeiro quadro-chave da retomada se perder, o espectador pode pedir
+// outro sem refazer a assinatura do stream nem reiniciar a conexão.
+const retryKeyframe = waitJson(broadcaster, 'need-keyframe');
+viewer.send(JSON.stringify({ type: 'request-keyframe', slot }));
+await retryKeyframe;
+
 const visitorJoin = await post('/api/rooms/join', {
   identity: visitor.data.identity,
   roomId: created.data.roomId,

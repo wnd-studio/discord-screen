@@ -80,6 +80,7 @@ let telaCheia = false;
 let fullscreenEnteredAt = 0;
 let audioOnlyBackground = false;
 let backgroundTimer = null;
+const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
@@ -846,6 +847,7 @@ function openStream(slot, userId) {
       onError: (m) => toast(m, true),
       onTamanho: () => {
         s.started = true;
+        clearVideoResume(slot);
         renderGrid();
       },
     }),
@@ -871,6 +873,32 @@ function startAudio(slot, config) {
   renderBar();
 }
 
+function clearVideoResume(slot) {
+  const timers = videoResumeTimers.get(slot) ?? [];
+  for (const timer of timers) clearTimeout(timer);
+  videoResumeTimers.delete(slot);
+}
+
+/**
+ * Um quadro-chave pode se perder justamente enquanto o Discord devolve CPU e
+ * rede à Activity. Repetir apenas o pedido de sincronização é barato e evita
+ * reiniciar o decoder/configuração, que prolongaria a tela "Conectando".
+ */
+function ensureVideoResume(slot) {
+  clearVideoResume(slot);
+  const timers = [350, 900, 1800].map((delay) => setTimeout(() => {
+    const stream = streams.get(slot);
+    if (!stream || stream.started || audioOnlyBackground || !watching.has(slot)) {
+      clearVideoResume(slot);
+      return;
+    }
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'request-keyframe', slot }));
+    }
+  }, delay));
+  videoResumeTimers.set(slot, timers);
+}
+
 function setPinnedUser(userId) {
   pinnedUserId = pinnedUserId === userId ? null : userId;
   if (pinnedUserId) store('pinnedUserId', pinnedUserId);
@@ -886,23 +914,29 @@ function setBackgroundAudioOnly(enabled) {
   for (const slot of watching) {
     ws?.send(JSON.stringify({ type: 'audio-only', slot, enabled }));
     if (enabled) {
+      clearVideoResume(slot);
       const stream = streams.get(slot);
       stream?.player.stop();
       if (stream) stream.started = false;
+    } else {
+      ensureVideoResume(slot);
     }
   }
 }
 
 function scheduleBackgroundMode() {
   clearTimeout(backgroundTimer);
-  backgroundTimer = setTimeout(() => {
-    setBackgroundAudioOnly(document.visibilityState === 'hidden' || !document.hasFocus());
-  }, 450);
+  const hidden = document.visibilityState === 'hidden';
+  // Ao voltar, retoma imediatamente. A pequena espera só existe ao sair para
+  // não reagir a mudanças rápidas de janela/overlay do próprio Discord.
+  if (!hidden) {
+    setBackgroundAudioOnly(false);
+    return;
+  }
+  backgroundTimer = setTimeout(() => setBackgroundAudioOnly(true), 300);
 }
 
 document.addEventListener('visibilitychange', scheduleBackgroundMode);
-window.addEventListener('blur', scheduleBackgroundMode);
-window.addEventListener('focus', scheduleBackgroundMode);
 
 function startStream(slot, config) {
   const s = streams.get(slot);
@@ -915,6 +949,7 @@ function startStream(slot, config) {
 function closeStream(slot) {
   const s = streams.get(slot);
   if (!s) return;
+  clearVideoResume(slot);
   s.player.stop();
   s.audio?.stop();
   s.canvas.remove();
