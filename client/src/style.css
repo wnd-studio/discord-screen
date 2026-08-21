@@ -126,7 +126,8 @@ body {
 #app.immersive .tile-footer,
 #app.immersive .tile-you,
 #app.immersive .tile-stop,
-#app.immersive .tile-volume {
+#app.immersive .tile-volume,
+#app.immersive .tile-pin {
   display: none !important;
 }
 
@@ -360,7 +361,8 @@ body {
 /* Canto inferior direito: livre, já que o nome fica à esquerda e o "você" em
    cima. Aparece ao passar o mouse para não poluir a grade parada. */
 .tile-stop,
-.tile-volume {
+.tile-volume,
+.tile-pin {
   position: absolute;
   right: 8px;
   bottom: 8px;
@@ -382,10 +384,17 @@ body {
   right: 46px;
 }
 
+.tile-pin {
+  right: 84px;
+}
+
 .tile:hover .tile-stop,
 .tile:hover .tile-volume,
+.tile:hover .tile-pin,
 .tile-stop:focus-visible,
-.tile-volume:focus-visible {
+.tile-volume:focus-visible,
+.tile-pin:focus-visible,
+.tile-pin.active {
   opacity: 1;
 }
 
@@ -397,8 +406,14 @@ body {
   background: var(--accent);
 }
 
+.tile-pin:hover,
+.tile-pin.active {
+  background: var(--accent);
+}
+
 .tile-stop svg,
-.tile-volume svg {
+.tile-volume svg,
+.tile-pin svg {
   width: 15px;
   height: 15px;
   fill: none;

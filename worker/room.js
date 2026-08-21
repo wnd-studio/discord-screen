@@ -257,6 +257,7 @@ export class Room extends DurableObject {
       for (const { ws } of previous) ws.close(1000, 'Conexão substituída');
       auth.watching = [];
       auth.primed = [];
+      auth.audioOnly = [];
     }
     auth.role = role;
     auth.name = String(auth.name ?? 'Convidado').slice(0, 32);
@@ -293,7 +294,7 @@ export class Room extends DurableObject {
       a.streaming = true; a.config = null; a.audioConfig = null; a.streamStartedAt = Date.now(); this.save(ws, a);
       this.recordEvent('stream_started', a);
       for (const viewer of this.sockets('viewer')) {
-        const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); this.save(viewer, va);
+        const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); va.audioOnly = (va.audioOnly ?? []).filter((slot) => slot !== a.slot); this.save(viewer, va);
         safeSend(viewer, JSON.stringify({ type: 'stream-start', slot: a.slot, userId: a.uid }));
       }
       this.broadcastState();
@@ -301,7 +302,7 @@ export class Room extends DurableObject {
       a.config = msg.config; this.save(ws, a);
       for (const viewer of this.sockets('viewer')) {
         const va = this.attachment(viewer); va.primed = va.primed.filter((slot) => slot !== a.slot); this.save(viewer, va);
-        if (va.watching.includes(a.slot)) safeSend(viewer, JSON.stringify({ type: 'config', slot: a.slot, config: a.config }));
+        if (va.watching.includes(a.slot) && !(va.audioOnly ?? []).includes(a.slot)) safeSend(viewer, JSON.stringify({ type: 'config', slot: a.slot, config: a.config }));
       }
     } else if (msg.type === 'audio-config' && msg.config) {
       a.audioConfig = msg.config; this.save(ws, a);
@@ -321,8 +322,22 @@ export class Room extends DurableObject {
       if (broadcaster.a.audioConfig) safeSend(ws, JSON.stringify({ type: 'audio-config', slot: msg.slot, config: broadcaster.a.audioConfig }));
       safeSend(broadcaster.ws, JSON.stringify({ type: 'need-keyframe' })); this.broadcastState();
     } else if (msg.type === 'unwatch' && Number.isInteger(msg.slot)) {
-      const before = a.watching.length; a.watching = a.watching.filter((slot) => slot !== msg.slot); a.primed = a.primed.filter((slot) => slot !== msg.slot); this.save(ws, a);
+      const before = a.watching.length; a.watching = a.watching.filter((slot) => slot !== msg.slot); a.primed = a.primed.filter((slot) => slot !== msg.slot); a.audioOnly = (a.audioOnly ?? []).filter((slot) => slot !== msg.slot); this.save(ws, a);
       if (a.watching.length !== before) this.broadcastState();
+    } else if (msg.type === 'audio-only' && Number.isInteger(msg.slot) && a.watching.includes(msg.slot)) {
+      a.audioOnly ??= [];
+      const broadcaster = this.broadcasters().find(({ a: ba }) => ba.slot === msg.slot && ba.streaming);
+      if (!broadcaster) return;
+      if (msg.enabled) {
+        if (!a.audioOnly.includes(msg.slot)) a.audioOnly.push(msg.slot);
+      } else {
+        a.audioOnly = a.audioOnly.filter((slot) => slot !== msg.slot);
+        a.primed = a.primed.filter((slot) => slot !== msg.slot);
+        if (broadcaster.a.config) safeSend(ws, JSON.stringify({ type: 'config', slot: msg.slot, config: broadcaster.a.config }));
+        safeSend(broadcaster.ws, JSON.stringify({ type: 'need-keyframe' }));
+      }
+      this.save(ws, a);
+      safeSend(ws, JSON.stringify({ type: 'audio-only', slot: msg.slot, enabled: Boolean(msg.enabled) }));
     } else if (msg.type === 'stop-broadcast') {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.uid === a.uid);
       if (broadcaster) safeSend(broadcaster.ws, JSON.stringify({ type: 'stop-request' }));
@@ -349,6 +364,7 @@ export class Room extends DurableObject {
     for (const viewer of this.sockets('viewer')) {
       const a = this.attachment(viewer);
       if (!a.watching.includes(broadcaster.slot)) continue;
+      if ((a.audioOnly ?? []).includes(broadcaster.slot) && type !== AUDIO) continue;
       if (type !== AUDIO && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
       const limit = type === KEYFRAME ? MAX_BUFFERED_BYTES * 2 : MAX_BUFFERED_BYTES;
       if (viewer.bufferedAmount > limit) { this.meta.droppedChunks++; continue; }
@@ -363,7 +379,7 @@ export class Room extends DurableObject {
     this.recordEvent('stream_stopped', a, durationMs);
     a.streaming = false; a.config = null; a.audioConfig = null; this.save(ws, a);
     for (const viewer of this.sockets('viewer')) {
-      const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); this.save(viewer, va);
+      const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); va.audioOnly = (va.audioOnly ?? []).filter((slot) => slot !== a.slot); this.save(viewer, va);
       safeSend(viewer, JSON.stringify({ type: 'stream-stop', slot: a.slot }));
     }
     this.broadcastState();

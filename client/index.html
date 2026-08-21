@@ -284,6 +284,14 @@
             </select>
           </label>
 
+          <label class="field-check economy-option">
+            <input id="mEconomy" type="checkbox" />
+            <span>
+              Modo economia
+              <em class="opt">Usa até 720p, 15 fps e 1 Mbps para reduzir internet, bateria e processamento.</em>
+            </span>
+          </label>
+
           <label class="field-check">
             <input id="mAudio" type="checkbox" />
             <span>
@@ -365,54 +373,34 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">ATUALIZAÇÃO 0.8</div>
-          <h2 id="newsTitle">Novidades no Screen Share</h2>
-          <p class="modal-sub">Melhorias para deixar as transmissões mais completas e fáceis de usar.</p>
+          <div class="news-kicker">BUILD 0.8.2</div>
+          <h2 id="newsTitle">Mais controle e economia</h2>
+          <p class="modal-sub">Um build menor com melhorias práticas para transmitir e assistir.</p>
 
           <ul class="news-list">
             <li>
-              <span class="news-icon">🌐</span>
-              <div><strong>Mais navegadores</strong><p>Firefox e Safari no computador agora podem usar um modo compatível de transmissão, com seleção automática de codec.</p></div>
+              <span class="news-icon">🍃</span>
+              <div><strong>Modo economia</strong><p>Um clique limita a transmissão a 720p, 15 fps e 1 Mbps.</p></div>
             </li>
             <li>
-              <span class="news-icon">📱</span>
-              <div><strong>Transmissão pelo celular</strong><p>Agora é possível transmitir a câmera e o microfone pelo navegador móvel, usando a câmera frontal ou traseira e sem instalar nada.</p></div>
+              <span class="news-icon">📌</span>
+              <div><strong>Fixar transmissão</strong><p>Escolha qual transmissão deve permanecer no palco principal.</p></div>
             </li>
             <li>
-              <span class="news-icon">📣</span>
-              <div><strong>Novidades no servidor</strong><p>Administradores agora podem escolher um canal para receber changelogs detalhados, sem precisar digitar comandos.</p></div>
+              <span class="news-icon">🎧</span>
+              <div><strong>Áudio em segundo plano</strong><p>Ao trocar de janela, o vídeo deixa de ser enviado ao espectador e somente o áudio continua.</p></div>
             </li>
             <li>
-              <span class="news-icon">✓</span>
-              <div><strong>Teste antes de entrar ao vivo</strong><p>Confira a tela, a câmera e o medidor de áudio antes de começar a transmissão.</p></div>
+              <span class="news-icon">⌨️</span>
+              <div><strong>Atalhos</strong><p>Use F para tela cheia, M para silenciar e Esc para sair ou fechar janelas.</p></div>
             </li>
             <li>
-              <span class="news-icon">↻</span>
-              <div><strong>Reconexão automática</strong><p>Oscilações rápidas de internet agora são recuperadas sem encerrar a transmissão.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">⚙</span>
-              <div><strong>Câmera personalizável</strong><p>Escolha a câmera, o tamanho e o canto em que ela aparece.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">🔊</span>
-              <div><strong>Áudio melhorado</strong><p>Agora tentamos capturar também o áudio de janelas compatíveis, além de abas e do sistema.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">📷</span>
-              <div><strong>Câmera na transmissão</strong><p>Mostre sua câmera no canto da tela e ligue ou desligue sem encerrar a live.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">🔉</span>
-              <div><strong>Controle de volume</strong><p>Cada espectador pode ajustar o volume geral e o volume de cada pessoa.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">⛶</span>
-              <div><strong>Tela cheia</strong><p>Uma visualização mais limpa e imersiva para acompanhar a transmissão.</p></div>
+              <span class="news-icon">💾</span>
+              <div><strong>Preferências salvas</strong><p>Qualidade, FPS, áudio, câmera e modo economia permanecem configurados para a próxima transmissão.</p></div>
             </li>
           </ul>
 
-          <p class="news-footnote">O áudio de uma janela depende do suporte do navegador e do aplicativo selecionado.</p>
+          <p class="news-footnote">Firefox, Safari e transmissão móvel continuam em fase de testes. O áudio de uma janela depende do navegador e do aplicativo selecionado.</p>
           <div class="modal-actions">
             <button id="newsClose" class="btn go">Entendi</button>
           </div>

@@ -156,6 +156,37 @@ const receivedFrame = new Promise((resolve, reject) => {
 broadcaster.send(Uint8Array.from([slot, 1, 42]));
 await receivedFrame;
 
+// Segundo plano: áudio continua, mas nenhum quadro de vídeo atravessa o relay.
+const audioOnlyConfirmed = waitJson(viewer, 'audio-only');
+viewer.send(JSON.stringify({ type: 'audio-only', slot, enabled: true }));
+await audioOnlyConfirmed;
+let leakedVideo = false;
+const receivedAudio = new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => reject(new Error('Audio-only relay timeout')), 5000);
+  const listener = async (event) => {
+    if (typeof event.data === 'string') return;
+    const bytes = new Uint8Array(await event.data.arrayBuffer());
+    if (bytes[0] !== slot) return;
+    if (bytes[1] === 1 || bytes[1] === 2) leakedVideo = true;
+    if (bytes[1] === 3) {
+      clearTimeout(timeout);
+      viewer.removeEventListener('message', listener);
+      resolve();
+    }
+  };
+  viewer.addEventListener('message', listener);
+});
+broadcaster.send(Uint8Array.from([slot, 1, 43]));
+broadcaster.send(Uint8Array.from([slot, 3, 44]));
+await receivedAudio;
+await new Promise((resolve) => setTimeout(resolve, 50));
+assert.equal(leakedVideo, false);
+
+const videoResumed = waitJson(viewer, 'audio-only');
+const resumeKeyframe = waitJson(broadcaster, 'need-keyframe');
+viewer.send(JSON.stringify({ type: 'audio-only', slot, enabled: false }));
+await Promise.all([videoResumed, resumeKeyframe]);
+
 const visitorJoin = await post('/api/rooms/join', {
   identity: visitor.data.identity,
   roomId: created.data.roomId,

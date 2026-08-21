@@ -146,6 +146,7 @@ function applyPresets() {
   const cam = query.get('cam');
   const camPos = query.get('camPos');
   const camSize = query.get('camSize');
+  const economy = query.get('eco') === '1';
 
   // A opção de som veio decidida da atividade, então a caixa some junto com os
   // seletores — repetir a mesma escolha aqui só confundiria.
@@ -171,7 +172,7 @@ function applyPresets() {
   const mbps = (Number($('quality').value) / 1e6).toFixed(1).replace('.', ',');
   const comSom = $('withAudio').checked ? ' · com som' : '';
   const comCamera = $('withCamera').checked ? ' · com câmera' : '';
-  $('presetLine').textContent = `${mbps} Mb/s · ${$('fps').value} fps${comSom}${comCamera}`;
+  $('presetLine').textContent = `${economy ? 'Modo economia · ' : ''}${mbps} Mb/s · ${$('fps').value} fps${comSom}${comCamera}`;
   $('presetLine').hidden = false;
 }
 
@@ -210,6 +211,8 @@ function buildBroadcaster() {
     camera: $('withCamera').checked,
     captureMode,
     facingMode,
+    maxWidth: query.get('eco') === '1' ? 1280 : 1920,
+    maxHeight: query.get('eco') === '1' ? 720 : 1080,
     cameraDeviceId: $('cameraDevice').value,
     cameraPosition: $('cameraPosition').value,
     cameraSize: $('cameraSize').value,

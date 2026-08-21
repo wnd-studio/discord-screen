@@ -49,8 +49,8 @@ const MAX_H = 1080;
 
 const even = (n) => Math.max(2, n - (n % 2));
 
-function fitWithin(w, h) {
-  const scale = Math.min(1, MAX_W / w, MAX_H / h);
+function fitWithin(w, h, maxWidth = MAX_W, maxHeight = MAX_H) {
+  const scale = Math.min(1, maxWidth / w, maxHeight / h);
   return { width: even(Math.round(w * scale)), height: even(Math.round(h * scale)) };
 }
 
@@ -87,6 +87,8 @@ export function compatibilityInfo() {
  * @param {boolean} [opts.camera]    mostrar a câmera sobre a tela
  * @param {'screen'|'camera'} [opts.captureMode] fonte principal do vídeo
  * @param {'user'|'environment'} [opts.facingMode] câmera frontal ou traseira
+ * @param {number} [opts.maxWidth] resolução máxima codificada
+ * @param {number} [opts.maxHeight] resolução máxima codificada
  * @param {string} [opts.cameraDeviceId] câmera preferida
  * @param {string} [opts.cameraPosition] canto da sobreposição
  * @param {string} [opts.cameraSize] tamanho da sobreposição
@@ -109,6 +111,8 @@ export function createBroadcaster({
   camera = false,
   captureMode = 'screen',
   facingMode = 'user',
+  maxWidth = MAX_W,
+  maxHeight = MAX_H,
   cameraDeviceId = '',
   cameraPosition = 'bottom-right',
   cameraSize = 'medium',
@@ -236,7 +240,7 @@ export function createBroadcaster({
     const track = stream.getVideoTracks()[0];
 
     const s = track.getSettings();
-    const target = fitWithin(s.width ?? 1280, s.height ?? 720);
+    const target = fitWithin(s.width ?? 1280, s.height ?? 720, maxWidth, maxHeight);
 
     config = await pickConfig(target.width, target.height);
     if (!config) {
@@ -914,7 +918,7 @@ export function createBroadcaster({
   }
 
   function targetSize(width, height) {
-    const base = fitWithin(width, height);
+    const base = fitWithin(width, height, maxWidth, maxHeight);
     const { scale } = adaptiveSettings();
     return { width: even(Math.round(base.width * scale)), height: even(Math.round(base.height * scale)) };
   }
@@ -1192,9 +1196,11 @@ export function createBroadcaster({
   }
 
   /** Ajusta qualidade e taxa de quadros com a transmissão no ar. */
-  function setQuality({ bitrate: nextBitrate, fps: nextFps } = {}) {
+  function setQuality({ bitrate: nextBitrate, fps: nextFps, maxWidth: nextMaxWidth, maxHeight: nextMaxHeight } = {}) {
     if (nextBitrate) requestedBitrate = nextBitrate;
     if (nextFps) requestedFps = nextFps;
+    if (nextMaxWidth) maxWidth = nextMaxWidth;
+    if (nextMaxHeight) maxHeight = nextMaxHeight;
     adaptiveLevel = 0;
     overloadedSeconds = 0;
     stableSeconds = 0;
@@ -1261,6 +1267,8 @@ export function createBroadcaster({
     cameraDeviceId,
     captureMode,
     facingMode,
+    maxWidth,
+    maxHeight,
   });
 
   function cleanup() {

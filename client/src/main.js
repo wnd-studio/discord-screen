@@ -75,12 +75,15 @@ let volumeAntes = volume || 1;
 // porque a grade é reconstruída a cada mudança de estado da sala, e a escolha
 // de quem assiste precisa sobreviver a isso.
 let activeSlot = null;
+let pinnedUserId = read('pinnedUserId');
 let telaCheia = false;
 let fullscreenEnteredAt = 0;
+let audioOnlyBackground = false;
+let backgroundTimer = null;
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8';
+const NEWS_VERSION = '0.8.2';
 
 // ------------------------------------------------------------------- helpers
 
@@ -128,6 +131,7 @@ function watchSlot(slot) {
   if (!info) return;
   watching.add(slot);
   ws?.send(JSON.stringify({ type: 'watch', slot }));
+  if (audioOnlyBackground) ws?.send(JSON.stringify({ type: 'audio-only', slot, enabled: true }));
   // O config pode já ter chegado; se não, ele chega logo e dispara o start.
   if (info.config) {
     openStream(slot, info.userId);
@@ -231,6 +235,8 @@ function renderGrid() {
   if (!casters.length) {
     activeSlot = null;
     telaCheia = false;
+  } else if (pinnedUserId && slotOf(pinnedUserId) !== null) {
+    activeSlot = slotOf(pinnedUserId);
   } else if (activeSlot === null || !available.has(activeSlot)) {
     // Sempre há uma tela em destaque quando existe transmissão: chegar numa
     // sala com tela no ar e ver só avatares esconderia o que importa.
@@ -399,6 +405,18 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
       unwatchSlot(slot);
     });
     tile.append(stop);
+
+    const pin = document.createElement('button');
+    const pinned = pinnedUserId === p.id;
+    pin.className = `tile-pin${pinned ? ' active' : ''}`;
+    pin.dataset.tip = pinned ? 'Desafixar transmissão' : 'Fixar transmissão';
+    pin.setAttribute('aria-label', `${pinned ? 'Desafixar' : 'Fixar'} transmissão de ${p.name}`);
+    pin.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 4 6 6-3 1-4 4-1 5-2-2-4 4-2-2 4-4-2-2 5-1 4-4z"/></svg>';
+    pin.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setPinnedUser(p.id);
+    });
+    tile.append(pin);
 
     // Controle visível: o ajuste individual já existia no clique direito,
     // mas esse gesto não é descoberto pela maioria e nem existe no celular.
@@ -852,6 +870,39 @@ function startAudio(slot, config) {
   renderGrid();
   renderBar();
 }
+
+function setPinnedUser(userId) {
+  pinnedUserId = pinnedUserId === userId ? null : userId;
+  if (pinnedUserId) store('pinnedUserId', pinnedUserId);
+  else remove('pinnedUserId');
+  const slot = pinnedUserId ? slotOf(pinnedUserId) : null;
+  if (slot !== null) activeSlot = slot;
+  renderGrid();
+}
+
+function setBackgroundAudioOnly(enabled) {
+  if (audioOnlyBackground === enabled) return;
+  audioOnlyBackground = enabled;
+  for (const slot of watching) {
+    ws?.send(JSON.stringify({ type: 'audio-only', slot, enabled }));
+    if (enabled) {
+      const stream = streams.get(slot);
+      stream?.player.stop();
+      if (stream) stream.started = false;
+    }
+  }
+}
+
+function scheduleBackgroundMode() {
+  clearTimeout(backgroundTimer);
+  backgroundTimer = setTimeout(() => {
+    setBackgroundAudioOnly(document.visibilityState === 'hidden' || !document.hasFocus());
+  }, 450);
+}
+
+document.addEventListener('visibilitychange', scheduleBackgroundMode);
+window.addEventListener('blur', scheduleBackgroundMode);
+window.addEventListener('focus', scheduleBackgroundMode);
 
 function startStream(slot, config) {
   const s = streams.get(slot);
@@ -1617,6 +1668,7 @@ function connect() {
         if (resumeWatchingUsers.has(s.userId) && !watching.has(s.slot)) {
           watching.add(s.slot);
           ws?.send(JSON.stringify({ type: 'watch', slot: s.slot }));
+          if (audioOnlyBackground) ws?.send(JSON.stringify({ type: 'audio-only', slot: s.slot, enabled: true }));
         }
       }
       if (resumeWatchingUsers.size) resumeWatchingUsers.clear();
@@ -1635,7 +1687,7 @@ function connect() {
       const info = available.get(msg.slot);
       if (info) info.config = msg.config;
       if (watching.has(msg.slot)) {
-        openStream(msg.slot, info?.userId ?? msg.slot);
+        if (!streams.has(msg.slot)) openStream(msg.slot, info?.userId ?? msg.slot);
         startStream(msg.slot, msg.config);
       }
     } else if (msg.type === 'audio-config') {
@@ -1767,11 +1819,11 @@ function openModal(mode) {
   if (!live) {
     $('mCameraPosition').value = read('cameraPosition') || 'bottom-right';
     $('mCameraSize').value = read('cameraSize') || 'medium';
-    if (mobileDevice) {
-      $('mQuality').value = '1000000';
-      $('mFps').value = '30';
-      $('mAudio').checked = true;
-    }
+    $('mEconomy').checked = mobileDevice || read('broadcastEconomy') === '1';
+    $('mQuality').value = $('mEconomy').checked ? '1000000' : read('broadcastQuality') || '2500000';
+    $('mFps').value = $('mEconomy').checked ? '15' : read('broadcastFps') || '30';
+    $('mAudio').checked = mobileDevice || read('broadcastAudio') === '1';
+    $('mCamera').checked = !mobileDevice && read('broadcastCamera') === '1';
   }
 
   $('mCamera').closest('.field-check').hidden = mobileDevice;
@@ -1793,6 +1845,7 @@ function openModal(mode) {
 
     const s = myBroadcast.getSettings();
     if (mobileDevice) $('mFacing').value = s.facingMode || 'user';
+    $('mEconomy').checked = s.maxWidth <= 1280 && s.maxHeight <= 720;
     $('mQuality').value = String(s.bitrate);
     $('mFps').value = String(s.fps);
     $('mCameraPosition').value = s.cameraPosition;
@@ -1862,6 +1915,28 @@ const closeModal = () => {
   $('modal').hidden = true;
 };
 
+function storeBroadcastPreferences() {
+  store('broadcastEconomy', $('mEconomy').checked ? '1' : '0');
+  store('broadcastQuality', $('mQuality').value);
+  store('broadcastFps', $('mFps').value);
+  store('broadcastAudio', $('mAudio').checked ? '1' : '0');
+  store('broadcastCamera', $('mCamera').checked ? '1' : '0');
+  store('cameraPosition', $('mCameraPosition').value);
+  store('cameraSize', $('mCameraSize').value);
+}
+
+$('mEconomy').addEventListener('change', () => {
+  if (!$('mEconomy').checked) return;
+  $('mQuality').value = '1000000';
+  $('mFps').value = '15';
+});
+
+for (const id of ['mQuality', 'mFps']) {
+  $(id).addEventListener('change', () => {
+    if ($(id).value !== (id === 'mQuality' ? '1000000' : '15')) $('mEconomy').checked = false;
+  });
+}
+
 /**
  * Transmite a partir daqui mesmo, sem abrir aba.
  *
@@ -1894,6 +1969,8 @@ async function broadcastFromHere() {
     camera: mobileDevice ? false : $('mCamera').checked,
     captureMode: mobileDevice ? 'camera' : 'screen',
     facingMode: $('mFacing').value,
+    maxWidth: $('mEconomy').checked ? 1280 : 1920,
+    maxHeight: $('mEconomy').checked ? 720 : 1080,
     cameraPosition: $('mCameraPosition').value,
     cameraSize: $('mCameraSize').value,
     onAviso: (m) => toast(m, true),
@@ -1946,13 +2023,14 @@ $('modalGo').addEventListener('click', async () => {
     myBroadcast?.setQuality({
       bitrate: Number($('mQuality').value),
       fps: Number($('mFps').value),
+      maxWidth: $('mEconomy').checked ? 1280 : 1920,
+      maxHeight: $('mEconomy').checked ? 720 : 1080,
     });
     myBroadcast?.setCameraLayout({
       position: $('mCameraPosition').value,
       size: $('mCameraSize').value,
     });
-    store('cameraPosition', $('mCameraPosition').value);
-    store('cameraSize', $('mCameraSize').value);
+    storeBroadcastPreferences();
     closeModal();
     return;
   }
@@ -1964,6 +2042,7 @@ $('modalGo').addEventListener('click', async () => {
   // teste com prévia e medidor. Dentro da Activity ainda tentamos a captura
   // direta; na maioria dos clientes a política do iframe direciona para a
   // mesma página externa.
+  storeBroadcastPreferences();
   if (inDiscord && await broadcastFromHere()) return;
 
   closeModal();
@@ -1977,9 +2056,8 @@ $('modalGo').addEventListener('click', async () => {
   url.searchParams.set('cam', $('mCamera').checked ? '1' : '0');
   url.searchParams.set('camPos', $('mCameraPosition').value);
   url.searchParams.set('camSize', $('mCameraSize').value);
+  url.searchParams.set('eco', $('mEconomy').checked ? '1' : '0');
   if (mobileDevice) url.searchParams.set('source', 'camera');
-  store('cameraPosition', $('mCameraPosition').value);
-  store('cameraSize', $('mCameraSize').value);
 
   if (inDiscord) {
     try {
@@ -2190,6 +2268,22 @@ document.addEventListener('fullscreenchange', () => {
 });
 
 window.addEventListener('keydown', (e) => {
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
+  if (typing || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+
+  if (e.key.toLowerCase() === 'm' && inRoom()) {
+    e.preventDefault();
+    setVolume(volume === 0 ? volumeAntes : 0);
+    toast(volume === 0 ? 'Som silenciado · atalho M' : 'Som ativado · atalho M');
+    return;
+  }
+
+  if (e.key.toLowerCase() === 'f' && activeSlot !== null) {
+    e.preventDefault();
+    toggleFullscreen();
+    return;
+  }
+
   if (e.key !== 'Escape') return;
 
   // Fecha o modal aberto mais recente antes de mexer no modo ampliado.
