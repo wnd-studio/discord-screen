@@ -2,6 +2,7 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { createPlayer } from './player.js';
 import { createAudio } from './audio.js';
 import { createBroadcaster } from '../../shared/broadcaster.js';
+import QRCode from 'qrcode';
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,7 +35,9 @@ let ws = null;
 let participants = [];
 let reconnectDelay = 1000;
 let lagTimer = null;
-let supportUrl = 'https://github.com/wnd-studio/discord-screen';
+const WISE_URL = 'https://wise.com/pay/me/wendelld173';
+const PIX_KEY = 'b4be56b2-502c-43bc-b716-b66c9c883737';
+const PIX_PAYLOAD = '00020101021126580014br.gov.bcb.pix0136b4be56b2-502c-43bc-b716-b66c9c8837375204000053039865802BR5920WENDELL D M DA SILVA6010ANANINDEUA62070503***630493C0';
 // Transmissão nascida aqui dentro, quando o Discord permite capturar no iframe.
 let myBroadcast = null;
 // Volume de tudo que chega, de 0 a 1. Vale para todas as telas e sobrevive a
@@ -1025,7 +1028,6 @@ async function boot() {
 
   const configData = await config;
   clientId = params.get('client_id') || configData.clientId || null;
-  supportUrl = configData.supportUrl || supportUrl;
   checkVersion(configData.asset);
   clearTimeout(vigia);
 
@@ -1075,18 +1077,61 @@ $('newsModal').addEventListener('click', (event) => {
   if (event.target === $('newsModal')) closeNews();
 });
 
-async function openSupport() {
+async function openExternal(url) {
   try {
     if (inDiscord) {
-      const result = await sdk?.commands.openExternalLink({ url: supportUrl });
+      const result = await sdk?.commands.openExternalLink({ url });
       if (result?.opened === false) toast('Você cancelou a abertura do link.');
     } else {
-      window.open(supportUrl, '_blank', 'noopener,noreferrer');
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   } catch (err) {
     toast(`Não foi possível abrir o apoio: ${err.message}`, true);
   }
 }
+
+async function openSupport() {
+  $('supportModal').hidden = false;
+  $('supportClose').focus();
+  try {
+    await QRCode.toCanvas($('pixQr'), PIX_PAYLOAD, {
+      width: 210,
+      margin: 2,
+      color: { dark: '#090a0c', light: '#ffffff' },
+      errorCorrectionLevel: 'M',
+    });
+  } catch {
+    toast('Não foi possível gerar o QR Code. Use o botão para copiar o Pix.', true);
+  }
+}
+
+function closeSupport() {
+  $('supportModal').hidden = true;
+}
+
+async function copySupportText(value, label) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = value;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.append(input);
+    input.select();
+    document.execCommand('copy');
+    input.remove();
+  }
+  toast(`${label} copiado.`);
+}
+
+$('supportClose').addEventListener('click', closeSupport);
+$('supportModal').addEventListener('click', (event) => {
+  if (event.target === $('supportModal')) closeSupport();
+});
+$('copyPixCode').addEventListener('click', () => copySupportText(PIX_PAYLOAD, 'Pix copia e cola'));
+$('copyPixKey').addEventListener('click', () => copySupportText(PIX_KEY, 'Chave Pix'));
+$('openWise').addEventListener('click', () => openExternal(WISE_URL));
 
 /** Abre a sala desta call, criando-a na primeira pessoa que chega. */
 async function entrarNaCall() {
@@ -2340,7 +2385,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
 
   // Fecha o modal aberto mais recente antes de mexer no modo ampliado.
-  for (const id of ['newsModal', 'profileModal', 'roomModal', 'joinModal', 'createModal', 'modal']) {
+  for (const id of ['supportModal', 'newsModal', 'profileModal', 'roomModal', 'joinModal', 'createModal', 'modal']) {
     if (!$(id).hidden) {
       $(id).hidden = true;
       return;

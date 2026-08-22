@@ -1355,6 +1355,93 @@ button {
   background: rgba(190, 24, 93, 0.3);
 }
 
+.support-card {
+  width: min(460px, 100%);
+}
+
+.support-kicker {
+  margin-bottom: 7px;
+  color: #f9a8d4;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.support-option {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #111214;
+}
+
+.support-option-head,
+.support-option-head > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.support-option-head > div {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.support-option-head span,
+.pix-recipient,
+.support-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.support-badge {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #9ff0c3 !important;
+  background: rgba(35, 165, 90, 0.16);
+}
+
+.pix-qr-wrap {
+  display: grid;
+  place-items: center;
+  margin: 14px 0 9px;
+}
+
+.pix-qr-wrap canvas {
+  width: min(210px, 62vw) !important;
+  height: auto !important;
+  padding: 6px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.pix-recipient {
+  margin: 0 0 11px;
+  text-align: center;
+}
+
+.support-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.support-wide {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.support-note {
+  margin: 12px 2px 0;
+  line-height: 1.45;
+}
+
+@media (max-width: 470px) {
+  .support-actions { grid-template-columns: 1fr; }
+}
+
 .modal-note {
   margin: 16px 0 0;
   padding: 10px 12px;

@@ -382,6 +382,37 @@
         </div>
       </div>
 
+      <div id="supportModal" class="modal" hidden>
+        <div class="modal-card support-card" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
+          <div class="support-kicker">APOIE O PROJETO</div>
+          <h2 id="supportTitle">Ajude o Discord Screen</h2>
+          <p class="modal-sub">Sua contribuição ajuda a manter o aplicativo disponível e financiar novas melhorias.</p>
+
+          <section class="support-option pix-option">
+            <div class="support-option-head">
+              <div><strong>Pix</strong><span>Brasil · qualquer valor</span></div>
+              <span class="support-badge">Recomendado</span>
+            </div>
+            <div class="pix-qr-wrap"><canvas id="pixQr" aria-label="QR Code Pix"></canvas></div>
+            <p class="pix-recipient">Wendell Diogo Mesquita da Silva</p>
+            <div class="support-actions">
+              <button id="copyPixCode" class="btn go">Copiar Pix copia e cola</button>
+              <button id="copyPixKey" class="btn">Copiar chave</button>
+            </div>
+          </section>
+
+          <section class="support-option wise-option">
+            <div class="support-option-head">
+              <div><strong>Wise</strong><span>Outros países e moedas</span></div>
+            </div>
+            <button id="openWise" class="btn support-wide">Apoiar pela Wise ↗</button>
+          </section>
+
+          <p class="support-note">A contribuição é opcional e não libera vantagens dentro do aplicativo.</p>
+          <div class="modal-actions"><button id="supportClose" class="btn">Fechar</button></div>
+        </div>
+      </div>
+
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
           <div class="news-kicker">BUILD 0.8.2</div>
