@@ -71,11 +71,17 @@ function blockedResponse(block) {
 }
 
 async function issueIdentity(env, instance, uid, name, avatar, ttl = 8 * 60 * 60, extra = {}) {
+  const supporterResult = /^\d{15,21}$/.test(String(uid))
+    ? await internal(registry(env), '/supporter/get', { userId: uid })
+    : null;
+  const supporter = supporterResult?.data?.supporter
+    ? { tier: supporterResult.data.supporter.tier, expiresAt: supporterResult.data.supporter.expiresAt }
+    : null;
   return {
-    user: { id: uid, name, avatar },
+    user: { id: uid, name, avatar, supporter },
     instance,
     identity: await signToken(
-      { instance, uid, name, av: avatar, scope: 'identity', ...extra },
+      { instance, uid, name, av: avatar, scope: 'identity', sup: supporter, ...extra },
       env.SESSION_SECRET,
       ttl
     ),
@@ -88,6 +94,7 @@ async function issueRoomTokens(request, env, roomId, me, room = null) {
     uid: me.uid,
     name: me.name,
     avatar: me.av ?? null,
+    supporter: me.sup ?? null,
     guild: me.guild ?? room?.guildId ?? null,
   };
   const viewerToken = await signToken(
@@ -358,6 +365,29 @@ async function adminApi(request, env, url, data) {
     return json({ ok: true, enabled });
   }
 
+  if (data.action === 'set-supporter') {
+    const userId = String(data.userId || '').trim();
+    const tier = data.tier === 'founder' ? 'founder' : 'supporter';
+    if (!/^\d{15,21}$/.test(userId)) return error('Informe um ID válido de usuário do Discord.');
+    const durationDays = Math.min(3650, Math.max(1, Number(data.durationDays) || 90));
+    const expiresAt = tier === 'founder' ? null : Date.now() + durationDays * 24 * 60 * 60 * 1000;
+    const result = await internal(registry(env), '/supporter/put', {
+      userId, tier, publicName: data.publicName, showCredit: data.showCredit === true,
+      expiresAt, createdBy: admin.uid,
+    });
+    if (!result.response.ok) return json(result.data, result.response.status);
+    await audit(env, admin, 'set-supporter', 'user', userId, { tier, expiresAt });
+    return json({ ok: true, expiresAt });
+  }
+
+  if (data.action === 'remove-supporter') {
+    const userId = String(data.userId || '').trim();
+    if (!/^\d{15,21}$/.test(userId)) return error('Apoiador inválido.');
+    await internal(registry(env), '/supporter/delete', { userId });
+    await audit(env, admin, 'remove-supporter', 'user', userId);
+    return json({ ok: true });
+  }
+
   return error('Ação administrativa desconhecida.', 400);
 }
 
@@ -473,6 +503,11 @@ async function api(request, env, url) {
     supportUrl: env.SUPPORT_URL || 'https://github.com/wnd-studio/discord-screen',
     asset: null,
   }, 200, { 'cache-control': 'no-store' });
+
+  if (url.pathname === '/api/supporters/public' && request.method === 'GET') {
+    const result = await internal(registry(env), '/supporter/public', {});
+    return json({ supporters: result.data.supporters || [] }, result.response.status, { 'cache-control': 'public, max-age=300' });
+  }
 
   if (url.pathname === '/api/token' && request.method === 'POST') {
     if (!data.code) return error('code obrigatorio');

@@ -116,6 +116,17 @@ export class RoomRegistry extends DurableObject {
         failure_count INTEGER NOT NULL DEFAULT 0,
         created_by TEXT NOT NULL,
         created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS supporters (
+        user_id TEXT PRIMARY KEY,
+        tier TEXT NOT NULL,
+        public_name TEXT,
+        show_credit INTEGER NOT NULL DEFAULT 0,
+        started_at INTEGER NOT NULL,
+        expires_at INTEGER,
+        created_by TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
       );`
     );
 
@@ -324,6 +335,52 @@ export class RoomRegistry extends DurableObject {
       return json({ ok: true });
     }
 
+    if (url.pathname === '/supporter/get') {
+      const row = this.ctx.storage.sql.exec(
+        `SELECT user_id, tier, public_name, show_credit, started_at, expires_at
+         FROM supporters WHERE user_id = ? AND (expires_at IS NULL OR expires_at > ?)`,
+        String(payload.userId || ''), Date.now()
+      ).toArray()[0];
+      return json({ supporter: row ? {
+        userId: row.user_id, tier: row.tier, publicName: row.public_name,
+        showCredit: Boolean(row.show_credit), startedAt: row.started_at, expiresAt: row.expires_at,
+      } : null });
+    }
+
+    if (url.pathname === '/supporter/public') {
+      const rows = this.ctx.storage.sql.exec(
+        `SELECT tier, public_name FROM supporters
+         WHERE show_credit = 1 AND public_name IS NOT NULL
+           AND (expires_at IS NULL OR expires_at > ?)
+         ORDER BY CASE tier WHEN 'founder' THEN 0 ELSE 1 END, started_at`,
+        Date.now()
+      ).toArray();
+      return json({ supporters: rows.map((row) => ({ tier: row.tier, name: row.public_name })) });
+    }
+
+    if (url.pathname === '/supporter/put') {
+      if (!/^\d{15,21}$/.test(String(payload.userId || '')) || !['supporter', 'founder'].includes(payload.tier)) {
+        return json({ error: 'Cadastro de apoiador inválido.' }, 400);
+      }
+      const now = Date.now();
+      this.ctx.storage.sql.exec(
+        `INSERT INTO supporters
+          (user_id, tier, public_name, show_credit, started_at, expires_at, created_by, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET tier=excluded.tier, public_name=excluded.public_name,
+           show_credit=excluded.show_credit, expires_at=excluded.expires_at,
+           created_by=excluded.created_by, updated_at=excluded.updated_at`,
+        payload.userId, payload.tier, cleanText(payload.publicName, 64), payload.showCredit ? 1 : 0,
+        Number(payload.startedAt) || now, Number(payload.expiresAt) || null, payload.createdBy, now
+      );
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/supporter/delete') {
+      this.ctx.storage.sql.exec('DELETE FROM supporters WHERE user_id = ?', String(payload.userId || ''));
+      return json({ ok: true });
+    }
+
     if (url.pathname === '/changelog/configure') {
       if (!payload.guildId || !payload.channelId || !payload.configuredBy) {
         return json({ error: 'Configuração de canal inválida.' }, 400);
@@ -526,8 +583,19 @@ export class RoomRegistry extends DurableObject {
       createdBy: row.created_by, createdAt: row.created_at,
     }));
 
+    const supporters = this.ctx.storage.sql.exec(
+      `SELECT user_id, tier, public_name, show_credit, started_at, expires_at, created_by, updated_at
+       FROM supporters ORDER BY CASE tier WHEN 'founder' THEN 0 ELSE 1 END, updated_at DESC`
+    ).toArray().map((row) => ({
+      userId: row.user_id, tier: row.tier, publicName: row.public_name,
+      showCredit: Boolean(row.show_credit), startedAt: row.started_at, expiresAt: row.expires_at,
+      createdBy: row.created_by, updatedAt: row.updated_at,
+      active: row.expires_at === null || row.expires_at > now,
+    }));
+
     return json({
       generatedAt: now, totals, rooms, servers, blocks, audit, daily, maintenance,
+      supporters,
       changelog: { channels: changelogChannels, history: changelogHistory },
     });
   }

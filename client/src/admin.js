@@ -252,7 +252,28 @@ const actionLabels = {
   unblock: 'Removeu um bloqueio',
   maintenance: 'Alterou o modo de manutenção',
   'publish-changelog': 'Publicou um changelog',
+  'set-supporter': 'Cadastrou ou atualizou um apoiador',
+  'remove-supporter': 'Removeu um apoiador',
 };
+
+function renderSupporters(supporters = []) {
+  const active = supporters.filter((item) => item.active);
+  $('#supporterStatus').textContent = `${number(active.length)} ativo(s)`;
+  $('#supporters').replaceChildren(...(supporters.length ? supporters.map((supporter) => {
+    const row = el('div', `stack-row ${supporter.active ? '' : 'inactive'}`.trim());
+    const main = el('div', 'stack-main');
+    const label = supporter.tier === 'founder' ? 'Fundador' : 'Apoiador';
+    main.append(el('strong', '', `${supporter.publicName || supporter.userId} · ${label}`));
+    main.append(el('span', '', `${supporter.userId} · ${supporter.expiresAt ? `até ${date(supporter.expiresAt)}` : 'permanente'}${supporter.showCredit ? ' · créditos públicos' : ''}`));
+    const remove = el('button', 'button danger-outline small', 'Remover');
+    remove.onclick = () => action(
+      { action: 'remove-supporter', userId: supporter.userId },
+      `Remover os benefícios de ${supporter.publicName || supporter.userId}?`
+    );
+    row.append(main, remove);
+    return row;
+  }) : [empty('Nenhum apoiador cadastrado ainda.')]));
+}
 
 function renderChangelog(changelog = {}, botConfigured, installUrl) {
   const channels = changelog.channels || [];
@@ -307,6 +328,7 @@ async function loadOverview(silent = false) {
     renderRooms(data.rooms || []);
     renderServers(data.servers || []);
     renderBlocks(data.blocks || []);
+    renderSupporters(data.supporters || []);
     renderAudit(data.audit || []);
     renderChangelog(data.changelog, data.botConfigured, data.installUrl);
     $('#updatedAt').textContent = `Atualizado ${date(data.generatedAt)}`;
@@ -357,6 +379,33 @@ $('#disableMaintenance').onclick = () => action(
   { action: 'maintenance', enabled: false },
   'Reabrir o aplicativo para todos?'
 );
+
+$('#supporterTier').addEventListener('change', () => {
+  $('#supporterDaysField').hidden = $('#supporterTier').value === 'founder';
+});
+
+$('#supporterForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const userId = $('#supporterUserId').value.trim();
+  if (!/^\d{15,21}$/.test(userId)) return showToast('Informe um ID válido do Discord.', true);
+  const publicName = $('#supporterPublicName').value.trim();
+  if ($('#supporterCredit').checked && !publicName) return showToast('Informe o nome que aparecerá nos agradecimentos.', true);
+  try {
+    await post('/api/admin/action', {
+      action: 'set-supporter', userId, publicName,
+      tier: $('#supporterTier').value,
+      durationDays: Number($('#supporterDays').value || 90),
+      showCredit: $('#supporterCredit').checked,
+    });
+    showToast('Apoiador salvo. O badge aparecerá na próxima entrada no aplicativo.');
+    $('#supporterForm').reset();
+    $('#supporterDays').value = '90';
+    $('#supporterDaysField').hidden = false;
+    await loadOverview(true);
+  } catch (problem) {
+    showToast(problem.message, true);
+  }
+});
 
 $('#changelogForm').addEventListener('submit', async (event) => {
   event.preventDefault();

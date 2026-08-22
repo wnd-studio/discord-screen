@@ -408,8 +408,8 @@ export class Room extends DurableObject {
 
   roomState() {
     const participants = new Map();
-    for (const { a } of this.viewers()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, broadcasting: false });
-    for (const { a } of this.broadcasters()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, broadcasting: true });
+    for (const { a } of this.viewers()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, broadcasting: false });
+    for (const { a } of this.broadcasters()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, broadcasting: true });
     const broadcasters = this.broadcasters();
     return {
       type: 'state',

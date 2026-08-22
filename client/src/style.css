@@ -797,6 +797,18 @@ button {
   white-space: nowrap;
 }
 
+.supporter-mark {
+  flex: 0 0 auto;
+  color: #f9a8d4;
+  font-size: 12px;
+  filter: drop-shadow(0 0 5px rgba(244, 114, 182, 0.55));
+}
+
+.supporter-mark.founder {
+  color: #facc15;
+  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.5));
+}
+
 .connection-pill {
   margin-left: auto;
   color: #c5f6d5;
@@ -1436,6 +1448,26 @@ button {
 .support-note {
   margin: 12px 2px 0;
   line-height: 1.45;
+}
+
+.supporter-credits {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  border-radius: 10px;
+  background: rgba(190, 24, 93, 0.08);
+}
+
+.supporter-credits strong {
+  color: #ffd7e5;
+  font-size: 13px;
+}
+
+.supporter-credits p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 @media (max-width: 470px) {

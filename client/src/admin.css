@@ -76,6 +76,14 @@ button, a { font: inherit; }
 .changelog-form { display:flex; flex-direction:column; gap:11px; }
 .changelog-form label { color:var(--muted); font-size:11px; font-weight:650; }
 .changelog-form input,.changelog-form textarea { display:block; width:100%; margin-top:5px; padding:10px 11px; border:1px solid var(--line); border-radius:8px; background:#111217; color:var(--text); font:inherit; font-size:13px; line-height:1.45; resize:vertical; }
+.supporter-layout { display:grid; grid-template-columns:minmax(250px,.72fr) minmax(300px,1.28fr); gap:22px; }
+.supporter-form { display:grid; gap:12px; }
+.supporter-form label { color:var(--muted); font-size:12px; }
+.supporter-form input,.supporter-form select { display:block; width:100%; margin-top:5px; padding:10px 11px; border:1px solid var(--line); border-radius:8px; background:#111217; color:var(--text); font:inherit; font-size:13px; }
+.supporter-form .supporter-check { display:flex; align-items:center; gap:8px; color:var(--text); }
+.supporter-form .supporter-check input { width:16px; margin:0; }
+.form-help { margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+.stack-row.inactive { opacity:.55; }
 .changelog-form input:focus,.changelog-form textarea:focus { outline:none; border-color:var(--accent); }
 .subheading { margin:0 0 9px; font-size:12px; }
 .history-heading { margin-top:18px; }
@@ -137,6 +145,7 @@ footer { margin-top: 26px; color: #757985; font-size: 11px; }
 
 @media (max-width: 1050px) { .stats { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 760px) {
+  .supporter-layout { grid-template-columns:1fr; }
   .topbar, .hero, .maintenance, footer { align-items: flex-start; flex-direction: column; }
   .top-actions { width: 100%; flex-wrap: wrap; }
   .updated { width: 100%; }

@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.8.2-22C55E?style=flat-square" alt="Versão 0.8.2">
+    <img src="https://img.shields.io/badge/versao-0.8.3-22C55E?style=flat-square" alt="Versão 0.8.3">
   </p>
 
   <p>
@@ -168,6 +168,10 @@ O painel mostra salas ativas, participantes, transmissões, servidores onde a At
 histórico de 90 dias e ações administrativas. É possível encerrar salas, desconectar ou bloquear
 usuários, bloquear servidores, ativar o modo de manutenção e publicar changelogs nos canais escolhidos
 pelos administradores dos servidores. Nenhuma imagem ou áudio da transmissão é exibido ou armazenado no painel.
+
+O painel também permite cadastrar apoiadores manualmente pelo ID do Discord. O cadastro guarda apenas
+a categoria, a validade e um nome público opcional. Apoiadores recebem um badge visual na próxima entrada;
+os nomes só aparecem nos agradecimentos quando essa opção é autorizada no cadastro.
 
 ## Arquitetura
 

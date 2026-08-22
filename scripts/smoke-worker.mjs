@@ -284,6 +284,24 @@ if (testAdmin) {
   const maintenanceOff = await adminPost('/api/admin/action', { action: 'maintenance', enabled: false });
   assert.equal(maintenanceOff.response.status, 200);
 
+  const supporterId = '123456789012345678';
+  const supporterSaved = await adminPost('/api/admin/action', {
+    action: 'set-supporter', userId: supporterId, tier: 'founder',
+    publicName: 'Apoiador de teste', showCredit: true,
+  });
+  assert.equal(supporterSaved.response.status, 200);
+  const supporterSession = await post('/api/session-dev', {
+    instance_id: 'web', user_id: supporterId, name: 'Apoiador de teste',
+  });
+  assert.equal(supporterSession.response.status, 200);
+  assert.equal(supporterSession.data.user.supporter.tier, 'founder');
+  const publicSupporters = await fetch(`${base}/api/supporters/public`).then((response) => response.json());
+  assert.equal(publicSupporters.supporters.some((item) => item.name === 'Apoiador de teste'), true);
+  const supporterRemoved = await adminPost('/api/admin/action', {
+    action: 'remove-supporter', userId: supporterId,
+  });
+  assert.equal(supporterRemoved.response.status, 200);
+
   const finalOverview = await adminPost('/api/admin/overview');
   assert.equal(finalOverview.response.status, 200);
   assert.ok(finalOverview.data.audit.length >= 4);

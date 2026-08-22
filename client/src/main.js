@@ -89,7 +89,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.2';
+const NEWS_VERSION = '0.8.3';
 
 // ------------------------------------------------------------------- helpers
 
@@ -474,6 +474,14 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
     badge.append(dot);
   }
   badge.append(document.createTextNode(p.name));
+  if (p.supporter) {
+    const supporter = document.createElement('span');
+    supporter.className = `supporter-mark ${p.supporter.tier === 'founder' ? 'founder' : ''}`.trim();
+    supporter.textContent = p.supporter.tier === 'founder' ? '◆' : '♥';
+    supporter.title = p.supporter.tier === 'founder' ? 'Apoiador Fundador' : 'Apoiador';
+    supporter.setAttribute('aria-label', supporter.title);
+    badge.append(supporter);
+  }
   footer.append(badge);
 
   if (slot !== null) footer.append(buildWatchers(slot));
@@ -583,7 +591,10 @@ function openProfile() {
 
   $('profileAvatar').replaceChildren(buildAvatar({ ...me, id: session.user.id }));
   $('profileName').textContent = me.name;
-  $('profileId').textContent = inDiscord ? `Discord · ${session.user.id}` : 'modo local';
+  const supporterLabel = me.supporter
+    ? ` · ${me.supporter.tier === 'founder' ? 'Apoiador Fundador' : 'Apoiador'} 💜`
+    : '';
+  $('profileId').textContent = inDiscord ? `Discord · ${session.user.id}${supporterLabel}` : `modo local${supporterLabel}`;
   $('profileInput').value = me.name;
 
   $('profileModal').hidden = false;
@@ -1104,6 +1115,15 @@ async function openSupport() {
   } catch {
     toast('Não foi possível gerar o QR Code. Use o botão para copiar o Pix.', true);
   }
+  fetch(`${P}/api/supporters/public`)
+    .then((response) => response.ok ? response.json() : { supporters: [] })
+    .then(({ supporters = [] }) => {
+      $('supporterCredits').hidden = !supporters.length;
+      $('supporterNames').textContent = supporters.map((item) =>
+        `${item.name}${item.tier === 'founder' ? ' ◆' : ''}`
+      ).join(' · ');
+    })
+    .catch(() => {});
 }
 
 function closeSupport() {
@@ -1191,7 +1211,7 @@ async function authWeb() {
     identity,
     isGuest: String(payload.uid).startsWith('guest-'),
     call: payload.call ?? null,
-    user: { id: payload.uid, name: payload.name, avatar: payload.av ?? null },
+    user: { id: payload.uid, name: payload.name, avatar: payload.av ?? null, supporter: payload.sup ?? null },
   };
 }
 

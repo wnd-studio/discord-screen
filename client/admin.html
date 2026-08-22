@@ -55,6 +55,36 @@
 
       <section id="stats" class="stats" aria-label="Resumo"></section>
 
+      <section class="panel supporter-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Comunidade</p>
+            <h2>Apoiadores</h2>
+          </div>
+          <span id="supporterStatus" class="panel-note"></span>
+        </div>
+        <div class="supporter-layout">
+          <form id="supporterForm" class="supporter-form">
+            <label>ID do Discord <input id="supporterUserId" inputmode="numeric" pattern="[0-9]{15,21}" maxlength="21" placeholder="123456789012345678" required /></label>
+            <label>Nome público <input id="supporterPublicName" maxlength="64" placeholder="Opcional" /></label>
+            <label>Categoria
+              <select id="supporterTier">
+                <option value="supporter">Apoiador · 90 dias</option>
+                <option value="founder">Apoiador Fundador · permanente</option>
+              </select>
+            </label>
+            <label id="supporterDaysField">Validade em dias <input id="supporterDays" type="number" min="1" max="3650" value="90" /></label>
+            <label class="supporter-check"><input id="supporterCredit" type="checkbox" /> Mostrar o nome nos agradecimentos públicos</label>
+            <button class="button primary" type="submit">Salvar apoiador</button>
+            <p class="form-help">Confirme o pagamento antes de cadastrar. Nenhum comprovante ou dado bancário é armazenado.</p>
+          </form>
+          <div>
+            <h3 class="subheading">Cadastros</h3>
+            <div id="supporters" class="stack"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel changelog-panel">
         <div class="panel-head">
           <div>
