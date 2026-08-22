@@ -49,6 +49,38 @@ O projeto também possui uma versão web. Nela é possível criar salas pública
 
 > O Screen Share não grava nem armazena o conteúdo das transmissões. Os pacotes de áudio e vídeo são apenas retransmitidos em tempo real.
 
+## 💜 Apoie o projeto
+
+O Screen Share é mantido de forma independente. As contribuições ajudam a manter a infraestrutura disponível e permitem continuar desenvolvendo correções e novas funcionalidades.
+
+**Apoiadores recebem benefícios exclusivos**, divulgados nos canais oficiais do projeto. O apoio é opcional e o aplicativo continua disponível normalmente para toda a comunidade.
+
+<div align="center">
+  <a href="https://wise.com/pay/me/wendelld173">
+    <img src="https://img.shields.io/badge/Apoiar_pela_Wise-163300?style=for-the-badge&logo=wise&logoColor=9FE870" alt="Apoiar pela Wise">
+  </a>
+  <a href="https://www.paypal.com/qrcodes/p2pqrc/TJ8SUKSF65WF6">
+    <img src="https://img.shields.io/badge/Apoiar_pelo_PayPal-003087?style=for-the-badge&logo=paypal&logoColor=white" alt="Apoiar pelo PayPal">
+  </a>
+</div>
+
+### Pix
+
+- **Chave aleatória:** `b4be56b2-502c-43bc-b716-b66c9c883737`
+- **Beneficiário:** Wendell Diogo Mesquita da Silva
+- **Valor:** livre, definido por quem está apoiando
+
+<details>
+<summary><strong>Mostrar Pix copia e cola</strong></summary>
+
+```text
+00020101021126580014br.gov.bcb.pix0136b4be56b2-502c-43bc-b716-b66c9c8837375204000053039865802BR5920WENDELL D M DA SILVA6010ANANINDEUA62070503***630493C0
+```
+
+</details>
+
+> Utilize apenas os links e a chave publicados neste repositório ou dentro do aplicativo. Nunca envie senhas, códigos de autenticação ou credenciais bancárias.
+
 ## Por que o projeto foi adaptado para a Cloudflare?
 
 A primeira versão utilizava uma arquitetura tradicional com **Node.js, Express, servidor HTTP e sessões mantidas em memória**. Ela funcionava localmente, mas dependia de um processo permanentemente ligado e apresentou problemas em serviços gratuitos de hospedagem — inclusive situações em que o deploy aparecia como ativo, mas as rotas HTTP não chegavam ao servidor.
