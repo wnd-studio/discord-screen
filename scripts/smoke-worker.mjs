@@ -121,6 +121,7 @@ if (devCall.response.status === 200) {
     roomId: callRoom.data.roomId,
   });
   assert.equal(deleteCall.response.status, 403);
+
 }
 
 const openSocket = (token) => new WebSocket(`${socketBase}/ws?t=${encodeURIComponent(token)}`);
@@ -133,6 +134,30 @@ const waitJson = (ws, type) => new Promise((resolve, reject) => {
   });
   ws.addEventListener('error', reject);
 });
+
+if (devCall.response.status === 200) {
+  // Hierarquia da Activity: um moderador recebe o cargo no token assinado e
+  // consegue remover um usuário comum da mesma sala da chamada.
+  const moderationCall = `moderation-${Date.now()}`;
+  const moderatorIdentity = await post('/api/session-dev', {
+    instance_id: `smoke-mod-${Date.now()}`, name: 'Moderador', call: moderationCall,
+    guild_id: '987654321098765432', access: 'moderator',
+  });
+  const regularIdentity = await post('/api/session-dev', {
+    instance_id: `smoke-user-${Date.now()}`, name: 'Usuário', call: moderationCall,
+    guild_id: '987654321098765432', access: 'user',
+  });
+  assert.equal(moderatorIdentity.data.user.access, 'moderator');
+  const moderatorRoom = await post('/api/rooms/call', { identity: moderatorIdentity.data.identity });
+  const regularRoom = await post('/api/rooms/call', { identity: regularIdentity.data.identity });
+  const moderatorSocket = openSocket(moderatorRoom.data.viewerToken);
+  const regularSocket = openSocket(regularRoom.data.viewerToken);
+  await Promise.all([waitJson(moderatorSocket, 'state'), waitJson(regularSocket, 'state')]);
+  const moderatedKick = waitJson(regularSocket, 'kicked');
+  moderatorSocket.send(JSON.stringify({ type: 'kick', userId: regularIdentity.data.user.id }));
+  await moderatedKick;
+  moderatorSocket.close();
+}
 
 const viewer = openSocket(joined.data.viewerToken);
 await waitJson(viewer, 'state');

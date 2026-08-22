@@ -1,6 +1,6 @@
 import { json, error, body, withSecurityHeaders } from './http.js';
 import { signToken, verifyToken } from './tokens.js';
-import { applicationMetadata, currentGuild, isApplicationAdmin, verifyDiscordRequest } from './discord.js';
+import { applicationMetadata, currentGuild, guildRole, isApplicationAdmin, verifyDiscordRequest } from './discord.js';
 export { Room } from './room.js';
 export { RoomRegistry } from './registry.js';
 
@@ -77,11 +77,12 @@ async function issueIdentity(env, instance, uid, name, avatar, ttl = 8 * 60 * 60
   const supporter = supporterResult?.data?.supporter
     ? { tier: supporterResult.data.supporter.tier, expiresAt: supporterResult.data.supporter.expiresAt }
     : null;
+  const access = extra.access || 'user';
   return {
-    user: { id: uid, name, avatar, supporter },
+    user: { id: uid, name, avatar, supporter, access },
     instance,
     identity: await signToken(
-      { instance, uid, name, av: avatar, scope: 'identity', sup: supporter, ...extra },
+      { instance, uid, name, av: avatar, scope: 'identity', sup: supporter, access, ...extra },
       env.SESSION_SECRET,
       ttl
     ),
@@ -95,6 +96,7 @@ async function issueRoomTokens(request, env, roomId, me, room = null) {
     name: me.name,
     avatar: me.av ?? null,
     supporter: me.sup ?? null,
+    access: me.access ?? 'user',
     guild: me.guild ?? room?.guildId ?? null,
   };
   const viewerToken = await signToken(
@@ -543,6 +545,7 @@ async function api(request, env, url) {
       guild: data.guild_id || null,
       channel: data.channel_id || null,
       ...(presence === 'ok' ? { call: data.channel_id } : {}),
+      access: await isApplicationAdmin(env, me.id) ? 'project_admin' : guildRole(guild),
     };
     const identity = await issueIdentity(env, data.instance_id, me.id, me.global_name || me.username, me.avatar ?? null, 8 * 60 * 60, context);
     return json({ ...identity, call: presence === 'ok' ? data.channel_id : null });
@@ -555,6 +558,7 @@ async function api(request, env, url) {
       ...(data.call ? { call: data.call } : {}),
       guild: data.guild_id || null,
       channel: data.channel_id || data.call || null,
+      access: ['project_admin', 'server_admin', 'moderator'].includes(data.access) ? data.access : 'user',
     };
     await internal(registry(env), '/usage/launch', {
       guildId: data.guild_id || null, guildName: data.guild_name || null,

@@ -92,10 +92,34 @@ export async function currentGuild(accessToken, guildId) {
     const guilds = await response.json();
     const guild = guilds.find((item) => item.id === String(guildId));
     if (!guild) return null;
-    return { id: guild.id, name: guild.name, icon: guild.icon ?? null };
+    return {
+      id: guild.id,
+      name: guild.name,
+      icon: guild.icon ?? null,
+      owner: guild.owner === true,
+      permissions: String(guild.permissions || '0'),
+    };
   } catch {
     return null;
   }
+}
+
+const ADMINISTRATOR = 8n;
+const MANAGE_GUILD = 32n;
+const MODERATION_PERMISSIONS = 2n | 4n | 16n | 8192n | 1099511627776n;
+
+/**
+ * Converte as permissões oficiais do servidor em uma função simples da
+ * atividade. O resultado entra em tokens assinados; o cliente nunca escolhe o
+ * próprio nível de acesso.
+ */
+export function guildRole(guild) {
+  if (!guild) return 'user';
+  let permissions = 0n;
+  try { permissions = BigInt(guild.permissions || '0'); } catch {}
+  if (guild.owner || (permissions & (ADMINISTRATOR | MANAGE_GUILD))) return 'server_admin';
+  if (permissions & MODERATION_PERMISSIONS) return 'moderator';
+  return 'user';
 }
 
 function hexBytes(value) {

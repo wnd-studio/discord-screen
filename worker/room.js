@@ -11,6 +11,9 @@ const LOCKOUT_MS = 30_000;
 const EMPTY_GRACE_MS = 12_000;
 const KEYFRAME = 1;
 const AUDIO = 3;
+const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
+
+const accessPower = (value) => ACCESS_POWER[value] ?? 0;
 
 const safeSend = (ws, value) => {
   try {
@@ -345,9 +348,19 @@ export class Room extends DurableObject {
     } else if (msg.type === 'stop-broadcast') {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.uid === a.uid);
       if (broadcaster) safeSend(broadcaster.ws, JSON.stringify({ type: 'stop-request' }));
-    } else if (msg.type === 'kick' && a.uid === this.meta.ownerId) {
+    } else if (msg.type === 'stop-user-broadcast') {
+      const target = String(msg.userId ?? '');
+      const broadcaster = this.broadcasters().find(({ a: ba }) => ba.uid === target);
+      if (!broadcaster || target === a.uid || !this.canModerate(a, broadcaster.a)) return;
+      safeSend(broadcaster.ws, JSON.stringify({ type: 'stop-request', reason: 'Transmissão encerrada pela moderação' }));
+    } else if (msg.type === 'kick' && (a.uid === this.meta.ownerId || accessPower(a.access) > 0)) {
       const target = String(msg.userId ?? '');
       if (!target || target === this.meta.ownerId) return;
+      const targetSocket = this.ctx.getWebSockets().find((socket) => this.attachment(socket).uid === target);
+      if (!targetSocket) return;
+      const targetAuth = this.attachment(targetSocket);
+      const ownerCanRemove = a.uid === this.meta.ownerId && accessPower(targetAuth.access) === 0;
+      if (!ownerCanRemove && !this.canModerate(a, targetAuth)) return;
       if (!this.meta.banned.includes(target)) {
         this.meta.banned.push(target);
         await this.ctx.storage.put('meta', this.meta);
@@ -359,6 +372,10 @@ export class Room extends DurableObject {
       }
       this.broadcastState();
     }
+  }
+
+  canModerate(actor, target) {
+    return accessPower(actor?.access) > accessPower(target?.access);
   }
 
   relayChunk(broadcaster, message) {
@@ -408,8 +425,8 @@ export class Room extends DurableObject {
 
   roomState() {
     const participants = new Map();
-    for (const { a } of this.viewers()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, broadcasting: false });
-    for (const { a } of this.broadcasters()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, broadcasting: true });
+    for (const { a } of this.viewers()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, access: a.access ?? 'user', broadcasting: false });
+    for (const { a } of this.broadcasters()) participants.set(a.uid, { id: a.uid, name: a.name, avatar: a.avatar ?? null, supporter: a.supporter ?? null, access: a.access ?? 'user', broadcasting: true });
     const broadcasters = this.broadcasters();
     return {
       type: 'state',

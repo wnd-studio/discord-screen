@@ -89,7 +89,13 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.3';
+const NEWS_VERSION = '0.8.4';
+const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
+const ACCESS_LABEL = {
+  moderator: 'MOD',
+  server_admin: 'ADM',
+  project_admin: 'EQUIPE',
+};
 
 // ------------------------------------------------------------------- helpers
 
@@ -474,6 +480,13 @@ function buildTile(p, { palco = false, semVideo = false } = {}) {
     badge.append(dot);
   }
   badge.append(document.createTextNode(p.name));
+  if (ACCESS_LABEL[p.access]) {
+    const access = document.createElement('span');
+    access.className = `access-badge access-${p.access}`;
+    access.textContent = ACCESS_LABEL[p.access];
+    access.title = p.access === 'project_admin' ? 'Equipe do projeto' : p.access === 'server_admin' ? 'Administrador do servidor' : 'Moderador';
+    badge.append(access);
+  }
   if (p.supporter) {
     const supporter = document.createElement('span');
     supporter.className = `supporter-mark ${p.supporter.tier === 'founder' ? 'founder' : ''}`.trim();
@@ -594,7 +607,8 @@ function openProfile() {
   const supporterLabel = me.supporter
     ? ` · ${me.supporter.tier === 'founder' ? 'Apoiador Fundador' : 'Apoiador'} 💜`
     : '';
-  $('profileId').textContent = inDiscord ? `Discord · ${session.user.id}${supporterLabel}` : `modo local${supporterLabel}`;
+  const accessLabel = ACCESS_LABEL[me.access] ? ` · ${ACCESS_LABEL[me.access]}` : '';
+  $('profileId').textContent = inDiscord ? `Discord · ${session.user.id}${accessLabel}${supporterLabel}` : `modo local${supporterLabel}`;
   $('profileInput').value = me.name;
 
   $('profileModal').hidden = false;
@@ -782,8 +796,29 @@ function buildPeopleList() {
     label.textContent = p.id === session?.user?.id ? `${p.name} (você)` : p.name;
     row.append(label);
 
+    if (ACCESS_LABEL[p.access]) {
+      const badge = document.createElement('span');
+      badge.className = `access-badge access-${p.access}`;
+      badge.textContent = ACCESS_LABEL[p.access];
+      row.append(badge);
+    }
+
     const iOwnTheRoom = lastRoomState?.ownerId === session?.user?.id;
-    if (iOwnTheRoom && p.id !== session?.user?.id) {
+    const myAccess = session?.user?.access || 'user';
+    const canModerate = (ACCESS_POWER[myAccess] || 0) > (ACCESS_POWER[p.access] || 0);
+    if ((iOwnTheRoom || canModerate) && p.id !== session?.user?.id) {
+      if (p.broadcasting && canModerate) {
+        const stop = document.createElement('button');
+        stop.type = 'button';
+        stop.className = 'hover-kick';
+        stop.textContent = 'Parar transmissão';
+        stop.addEventListener('click', (event) => {
+          event.stopPropagation();
+          ws?.send(JSON.stringify({ type: 'stop-user-broadcast', userId: p.id }));
+          toast(`A transmissão de ${p.name} foi encerrada.`);
+        });
+        row.append(stop);
+      }
       const kick = document.createElement('button');
       kick.type = 'button';
       kick.className = 'hover-kick';
@@ -1211,7 +1246,7 @@ async function authWeb() {
     identity,
     isGuest: String(payload.uid).startsWith('guest-'),
     call: payload.call ?? null,
-    user: { id: payload.uid, name: payload.name, avatar: payload.av ?? null, supporter: payload.sup ?? null },
+    user: { id: payload.uid, name: payload.name, avatar: payload.av ?? null, supporter: payload.sup ?? null, access: payload.access ?? 'user' },
   };
 }
 

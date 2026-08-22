@@ -136,6 +136,8 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Senha opcional para salas web | ✅ Disponível |
 | Convites com prazo de validade | ✅ Expiram em 8 horas |
 | Remoção de participantes pelo dono | ✅ Disponível nas salas web |
+| Hierarquia dentro da Atividade | ✅ Equipe, administrador, moderador e usuário |
+| Moderação dentro da chamada | ✅ Remover usuários e encerrar transmissões de níveis inferiores |
 | Exclusão manual da sala pelo dono | ✅ Disponível nas salas web |
 | Painel administrativo protegido | ✅ Disponível em `/admin` |
 | Histórico de uso por servidor | ✅ Retenção operacional de 90 dias |
@@ -156,6 +158,11 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Transmissão iniciada pelo celular | ❌ Ainda não suportada |
 
 O transmissor também interrompe a codificação quando ninguém está assistindo, reduzindo consumo de processamento e da cota da Cloudflare.
+
+Dentro da Atividade, os cargos são calculados pelo backend a partir das permissões oficiais do
+Discord. O proprietário e quem administra o servidor recebe **ADM**; pessoas com permissões de
+moderação recebem **MOD**; responsáveis globais pelo aplicativo recebem **EQUIPE**. Os controles
+são validados novamente no Durable Object da sala e só funcionam contra níveis inferiores.
 
 ### Painel administrativo
 
