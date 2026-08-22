@@ -36,6 +36,7 @@ let participants = [];
 let reconnectDelay = 1000;
 let lagTimer = null;
 const WISE_URL = 'https://wise.com/pay/me/wendelld173';
+const PAYPAL_URL = 'https://www.paypal.com/qrcodes/p2pqrc/TJ8SUKSF65WF6';
 const PIX_KEY = 'b4be56b2-502c-43bc-b716-b66c9c883737';
 const PIX_PAYLOAD = '00020101021126580014br.gov.bcb.pix0136b4be56b2-502c-43bc-b716-b66c9c8837375204000053039865802BR5920WENDELL D M DA SILVA6010ANANINDEUA62070503***630493C0';
 // Transmissão nascida aqui dentro, quando o Discord permite capturar no iframe.
@@ -1132,6 +1133,7 @@ $('supportModal').addEventListener('click', (event) => {
 $('copyPixCode').addEventListener('click', () => copySupportText(PIX_PAYLOAD, 'Pix copia e cola'));
 $('copyPixKey').addEventListener('click', () => copySupportText(PIX_KEY, 'Chave Pix'));
 $('openWise').addEventListener('click', () => openExternal(WISE_URL));
+$('openPaypal').addEventListener('click', () => openExternal(PAYPAL_URL));
 
 /** Abre a sala desta call, criando-a na primeira pessoa que chega. */
 async function entrarNaCall() {
