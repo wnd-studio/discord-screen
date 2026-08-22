@@ -69,7 +69,11 @@ Quem não quiser instalar o Git também pode abrir o repositório no GitHub, cli
 1. Abra o [Discord Developer Portal](https://discord.com/developers/applications).
 2. Clique em **New Application**.
 3. Escolha um nome e confirme a criação.
-4. Em **General Information**, configure o nome, a descrição e o ícone desejados.
+4. Em **General Information**, configure o nome, a descrição e o ícone desejados. Para esta versão, recomendamos:
+   - nome: `Discord Screen`;
+   - descrição: `Compartilhe telas, janelas, abas e câmera diretamente nas chamadas do Discord, sem instalar programas. Assista a múltiplas transmissões, controle o volume individualmente e utilize ferramentas integradas de moderação.`
+   - Terms of Service URL: `https://SEU_HOST/termos`;
+   - Privacy Policy URL: `https://SEU_HOST/privacidade`.
 5. Guarde o **Application ID/Client ID**. Esse número é público e será usado como `DISCORD_CLIENT_ID`.
 
 ### Obter o Client Secret
@@ -85,7 +89,9 @@ Esse valor será o `DISCORD_CLIENT_SECRET`. Não envie esse secret para outras p
 1. Abra **Installation**.
 2. Em **Installation Contexts**, habilite **User Install** e **Guild Install**.
 3. Em **Install Link**, escolha **Discord Provided Link**.
-4. Em **Default Install Settings**, utilize o escopo `applications.commands` para os dois contextos.
+4. Em **Default Install Settings**:
+   - para **User Install**, utilize `applications.commands`;
+   - para **Guild Install**, utilize `applications.commands` e, se desejar o bot de novidades, `bot` com as permissões **Ver canais**, **Enviar mensagens** e **Inserir links**.
 5. Salve as alterações.
 6. Abra **Activities → Settings** e habilite **Enable Activities**.
 

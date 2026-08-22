@@ -97,6 +97,8 @@ if (testAdmin) {
   const liveOverview = await adminPost('/api/admin/overview');
   assert.equal(liveOverview.response.status, 200);
   assert.equal(liveOverview.data.rooms.some((room) => room.id === created.data.roomId), true);
+  assert.equal(liveOverview.data.bot.configured, false);
+  assert.equal(liveOverview.data.bot.valid, false);
 }
 
 // Em desenvolvimento conseguimos emitir uma identidade de Activity sem falar

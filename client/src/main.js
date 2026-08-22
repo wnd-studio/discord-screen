@@ -89,7 +89,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.4';
+const NEWS_VERSION = '0.8.5';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',

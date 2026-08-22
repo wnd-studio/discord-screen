@@ -254,6 +254,7 @@ const actionLabels = {
   'publish-changelog': 'Publicou um changelog',
   'set-supporter': 'Cadastrou ou atualizou um apoiador',
   'remove-supporter': 'Removeu um apoiador',
+  'toggle-changelog-channel': 'Alterou o recebimento de changelogs',
 };
 
 function renderSupporters(supporters = []) {
@@ -275,7 +276,19 @@ function renderSupporters(supporters = []) {
   }) : [empty('Nenhum apoiador cadastrado ainda.')]));
 }
 
-function renderChangelog(changelog = {}, botConfigured, installUrl) {
+function renderBotDiagnostics(bot = {}) {
+  const box = $('#botDiagnostics');
+  const status = el('div', `bot-health ${bot.valid ? 'healthy' : 'unhealthy'}`);
+  status.append(
+    el('strong', '', bot.valid ? `${bot.name || 'Bot'} conectado` : bot.configured ? 'Bot com problema' : 'Bot não configurado'),
+    el('span', '', bot.valid
+      ? `${bot.guildCount === null || bot.guildCount === undefined ? '—' : number(bot.guildCount)} servidor(es) · verificado ${date(bot.checkedAt)}`
+      : bot.error || 'Configure DISCORD_BOT_TOKEN na Cloudflare.')
+  );
+  box.replaceChildren(status);
+}
+
+function renderChangelog(changelog = {}, botConfigured, installUrl, bot = {}) {
   const channels = changelog.channels || [];
   const enabled = channels.filter((item) => item.enabled);
   $('#changelogStatus').textContent = botConfigured
@@ -283,6 +296,7 @@ function renderChangelog(changelog = {}, botConfigured, installUrl) {
     : 'Bot ainda não configurado';
   $('#publishChangelog').disabled = !botConfigured || !enabled.length;
   $('#installBot').href = installUrl || '/changelog/install';
+  renderBotDiagnostics(bot);
 
   $('#changelogChannels').replaceChildren(...(channels.length ? channels.map((channel) => {
     const row = el('div', 'stack-row');
@@ -291,7 +305,12 @@ function renderChangelog(changelog = {}, botConfigured, installUrl) {
     main.append(el('span', '', channel.enabled
       ? `ativo${channel.lastSentAt ? ` · último envio ${date(channel.lastSentAt)}` : ''}`
       : `desativado${channel.lastError ? ` · ${channel.lastError}` : ''}`));
-    row.append(main, el('span', `badge ${channel.enabled ? 'installed' : ''}`, channel.enabled ? 'Ativo' : 'Inativo'));
+    const toggle = el('button', `button ${channel.enabled ? 'danger-outline' : 'secondary'} small`, channel.enabled ? 'Desativar' : 'Reativar');
+    toggle.onclick = () => action(
+      { action: 'toggle-changelog-channel', guildId: channel.guildId, enabled: !channel.enabled },
+      `${channel.enabled ? 'Desativar' : 'Reativar'} as novidades em #${channel.channelName || channel.channelId}?`
+    );
+    row.append(main, toggle);
     return row;
   }) : [empty('Nenhum servidor escolheu um canal ainda.')]));
 
@@ -330,7 +349,7 @@ async function loadOverview(silent = false) {
     renderBlocks(data.blocks || []);
     renderSupporters(data.supporters || []);
     renderAudit(data.audit || []);
-    renderChangelog(data.changelog, data.botConfigured, data.installUrl);
+    renderChangelog(data.changelog, data.botConfigured, data.installUrl, data.bot);
     $('#updatedAt').textContent = `Atualizado ${date(data.generatedAt)}`;
     $('#maintenanceBanner').hidden = !data.maintenance;
     $('#enableMaintenance').hidden = Boolean(data.maintenance);

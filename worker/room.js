@@ -21,6 +21,16 @@ const safeSend = (ws, value) => {
   } catch {}
 };
 
+function decodeHeaderJson(value) {
+  if (!value) throw new Error('Cabeçalho ausente');
+  // Compatibilidade com conexões iniciadas durante um deploy anterior.
+  if (value.startsWith('{')) return JSON.parse(value);
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -241,7 +251,7 @@ export class Room extends DurableObject {
   upgrade(request) {
     if (!this.meta) return new Response('Sala não existe mais.', { status: 404 });
     let auth;
-    try { auth = JSON.parse(request.headers.get('x-room-auth')); } catch { return new Response('Unauthorized', { status: 401 }); }
+    try { auth = decodeHeaderJson(request.headers.get('x-room-auth')); } catch { return new Response('Unauthorized', { status: 401 }); }
     if (this.meta.banned?.includes(auth.uid)) return new Response('Removido', { status: 403 });
     const role = auth.role === 'broadcaster' ? 'broadcaster' : 'viewer';
     if (role === 'broadcaster') {

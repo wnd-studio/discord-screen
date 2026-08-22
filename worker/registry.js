@@ -275,6 +275,14 @@ export class RoomRegistry extends DurableObject {
              installed_at=excluded.installed_at, authorized_by=excluded.authorized_by`,
           guild.id, cleanText(guild.name, 100), cleanText(guild.icon, 80), at, at, at, data.user?.id ?? null
         );
+      } else if (payload.eventType === 'APPLICATION_DEAUTHORIZED' && guild?.id) {
+        this.ctx.storage.sql.exec(
+          'UPDATE servers SET installed = 0, last_seen = ? WHERE guild_id = ?', at, guild.id
+        );
+        this.ctx.storage.sql.exec(
+          `UPDATE changelog_channels SET enabled = 0, updated_at = ?,
+             last_error = 'Aplicativo removido do servidor' WHERE guild_id = ?`, at, guild.id
+        );
       }
       this.addEvent({
         kind: payload.eventType === 'APPLICATION_AUTHORIZED' ? 'application_authorized' : 'application_deauthorized',
@@ -419,6 +427,19 @@ export class RoomRegistry extends DurableObject {
         `UPDATE changelog_channels SET enabled = ?, last_sent_at = ?, last_error = ? WHERE guild_id = ?`,
         payload.disable ? 0 : 1, payload.ok ? Date.now() : null,
         payload.ok ? null : cleanText(payload.error, 240), payload.guildId
+      );
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/changelog/toggle') {
+      const guildId = String(payload.guildId || '');
+      const existing = this.ctx.storage.sql.exec(
+        'SELECT guild_id FROM changelog_channels WHERE guild_id = ?', guildId
+      ).toArray()[0];
+      if (!existing) return json({ error: 'Canal de novidades não encontrado.' }, 404);
+      this.ctx.storage.sql.exec(
+        'UPDATE changelog_channels SET enabled = ?, updated_at = ?, last_error = NULL WHERE guild_id = ?',
+        payload.enabled ? 1 : 0, Date.now(), guildId
       );
       return json({ ok: true });
     }

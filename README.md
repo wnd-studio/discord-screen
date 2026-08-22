@@ -144,6 +144,8 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Encerramento e bloqueios administrativos | ✅ Usuário, servidor ou sala |
 | Eventos de autorização do Discord | ✅ Webhook assinado |
 | Changelogs enviados pelo bot | ✅ Canal escolhido em página, sem comandos |
+| Diagnóstico do bot | ✅ Token, identidade e servidores verificados no painel |
+| Pausar novidades por servidor | ✅ Desativar e reativar sem reinstalar |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Modo compatível para Firefox e Safari desktop | ✅ Codec e captura selecionados automaticamente |
 | Transmissão móvel de câmera e microfone | ✅ Pelo navegador, com câmera frontal/traseira e sem instalação |
@@ -175,6 +177,10 @@ O painel mostra salas ativas, participantes, transmissões, servidores onde a At
 histórico de 90 dias e ações administrativas. É possível encerrar salas, desconectar ou bloquear
 usuários, bloquear servidores, ativar o modo de manutenção e publicar changelogs nos canais escolhidos
 pelos administradores dos servidores. Nenhuma imagem ou áudio da transmissão é exibido ou armazenado no painel.
+
+O painel também valida o bot diretamente no Discord, mostra quantos servidores ele atende e permite
+desativar ou reativar individualmente cada canal de novidades. Eventos de desautorização removem o
+servidor da lista de instalações ativas e interrompem novos envios para ele.
 
 O painel também permite cadastrar apoiadores manualmente pelo ID do Discord. O cadastro guarda apenas
 a categoria, a validade e um nome público opcional. Apoiadores recebem um badge visual na próxima entrada;
@@ -341,6 +347,9 @@ Para a URL pública `https://tela.seudominio.com`, configure:
 - **Activities → URL Mappings → `/`:** `tela.seudominio.com` (sem `https://`)
 - **Installation Contexts:** `User Install` e `Guild Install`
 - **Default Install Scope:** `applications.commands`
+- **Guild Install adicional para o bot:** escopo `bot`; permissões `View Channels`, `Send Messages` e `Embed Links`
+- **Terms of Service URL:** `https://tela.seudominio.com/termos`
+- **Privacy Policy URL:** `https://tela.seudominio.com/privacidade`
 - **Webhooks → Endpoint URL:** `https://tela.seudominio.com/api/discord/events`
 - **Webhook Events:** `APPLICATION_AUTHORIZED` e `APPLICATION_DEAUTHORIZED`
 

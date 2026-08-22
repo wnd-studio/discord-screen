@@ -13,6 +13,8 @@ const OAUTH_STATE_COOKIE = 'discord_screen_oauth_state';
 const INSTALL_STATE_COOKIE = 'discord_screen_install_state';
 const CHANGELOG_SETUP_TTL = 20 * 60;
 const DISCORD_MESSAGE_PERMISSIONS = 1024 + 2048 + 16384;
+const BOT_STATUS_CACHE_MS = 60_000;
+let botStatusCache = null;
 
 function originFor(request, env) {
   return String(env.PUBLIC_ORIGIN || new URL(request.url).origin).replace(/\/+$/, '');
@@ -131,6 +133,13 @@ async function discordToken(env, parameters) {
   }).then((response) => response.json());
 }
 
+function encodeHeaderJson(value) {
+  const bytes = new TextEncoder().encode(JSON.stringify(value));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 async function discordBot(env, path, options = {}) {
   if (!env.DISCORD_BOT_TOKEN) return { ok: false, status: 503, data: { message: 'Bot não configurado.' } };
   const response = await fetch(`https://discord.com/api/v10${path}`, {
@@ -155,6 +164,26 @@ async function sendDiscordMessage(env, channelId, payload) {
     });
   }
   return result;
+}
+
+async function botDiagnostics(env) {
+  if (!env.DISCORD_BOT_TOKEN) return { configured: false, valid: false, checkedAt: Date.now() };
+  if (botStatusCache?.expiresAt > Date.now()) return botStatusCache.value;
+  const [user, guilds] = await Promise.all([
+    discordBot(env, '/users/@me'),
+    discordBot(env, '/users/@me/guilds'),
+  ]);
+  const value = {
+    configured: true,
+    valid: user.ok,
+    id: user.ok ? user.data.id : null,
+    name: user.ok ? user.data.global_name || user.data.username : null,
+    guildCount: guilds.ok && Array.isArray(guilds.data) ? guilds.data.length : null,
+    error: user.ok ? null : user.data?.message || `Discord respondeu ${user.status}`,
+    checkedAt: Date.now(),
+  };
+  botStatusCache = { value, expiresAt: Date.now() + BOT_STATUS_CACHE_MS };
+  return value;
 }
 
 function changelogEmbed({ version, title, summary, details, url }) {
@@ -232,8 +261,11 @@ async function adminApi(request, env, url, data) {
   }
 
   if (url.pathname === '/api/admin/overview') {
-    const overview = await internal(registry(env), '/admin/overview', {});
-    const application = await applicationMetadata(env);
+    const [overview, application, bot] = await Promise.all([
+      internal(registry(env), '/admin/overview', {}),
+      applicationMetadata(env),
+      botDiagnostics(env),
+    ]);
     return json({
       ...overview.data,
       application: application ? {
@@ -245,6 +277,7 @@ async function adminApi(request, env, url, data) {
         webhookTypes: application.event_webhooks_types ?? [],
       } : null,
       botConfigured: Boolean(env.DISCORD_BOT_TOKEN),
+      bot,
       installUrl: `${originFor(request, env)}/changelog/install`,
     }, overview.response.status);
   }
@@ -388,6 +421,16 @@ async function adminApi(request, env, url, data) {
     await internal(registry(env), '/supporter/delete', { userId });
     await audit(env, admin, 'remove-supporter', 'user', userId);
     return json({ ok: true });
+  }
+
+  if (data.action === 'toggle-changelog-channel') {
+    const guildId = String(data.guildId || '').trim();
+    if (!/^\d{15,21}$/.test(guildId)) return error('Servidor inválido.');
+    const enabled = data.enabled === true;
+    const result = await internal(registry(env), '/changelog/toggle', { guildId, enabled });
+    if (!result.response.ok) return json(result.data, result.response.status);
+    await audit(env, admin, 'toggle-changelog-channel', 'guild', guildId, { enabled });
+    return json({ ok: true, enabled });
   }
 
   return error('Ação administrativa desconhecida.', 400);
@@ -698,7 +741,9 @@ async function websocket(request, env, url) {
   const blocked = await blockFor(env, auth.uid, auth.guild);
   if (blocked) return new Response('Blocked', { status: 403 });
   const headers = new Headers(request.headers);
-  headers.set('x-room-auth', JSON.stringify(auth));
+  // Cabeçalhos aceitam somente bytes ASCII. Codificar evita falhas quando o
+  // nome do usuário contém acentos, emojis ou outros caracteres do Discord.
+  headers.set('x-room-auth', encodeHeaderJson(auth));
   return roomStub(env, auth.room).fetch(new Request(`https://room.internal/ws`, { method: request.method, headers }));
 }
 
