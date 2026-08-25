@@ -570,7 +570,10 @@ async function start() {
     $('#adminIdentity').textContent = `Administrador: ${admin.name} · ${admin.id}`;
     await loadOverview();
     refreshTimer = setInterval(() => loadOverview(true), 10_000);
-  } catch {
+  } catch (problem) {
+    if (problem?.message && problem.status !== 401) {
+      $('#loginMessage').textContent = `Não foi possível validar a sessão: ${problem.message}`;
+    }
     showLogin();
   }
 }

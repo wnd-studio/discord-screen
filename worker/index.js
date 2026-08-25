@@ -56,7 +56,11 @@ async function adminOf(request, env) {
   const token = await verifyToken(cookies(request)[ADMIN_COOKIE], env.SESSION_SECRET);
   if (token?.scope !== 'admin') return null;
   if (!token.iat || Math.floor(Date.now() / 1000) - Number(token.iat) > ADMIN_TOKEN_TTL) return null;
-  return await isApplicationAdmin(env, token.uid) ? token : null;
+  // A conta já foi validada contra o Discord no callback do OAuth. Repetir a
+  // consulta em toda requisição fazia uma sessão recém-criada parecer inválida
+  // quando a API do Discord oscilava ou outra instância do Worker ainda não
+  // tinha o cache. A assinatura e o prazo curto da sessão são a autoridade aqui.
+  return token;
 }
 
 async function requestFingerprint(request, env) {
