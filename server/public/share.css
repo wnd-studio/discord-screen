@@ -255,10 +255,6 @@ button:disabled {
   transform: scaleX(-1);
 }
 
-#previewStep .preview-wrap {
-  max-height: 280px;
-}
-
 .camera-preview {
   position: absolute;
   right: 14px;
@@ -306,11 +302,6 @@ button:disabled {
   margin-bottom: 9px;
 }
 
-.step-title {
-  margin: 0 0 14px;
-  font-size: 17px;
-}
-
 .audio-test {
   margin: 14px 0;
   padding: 12px;
@@ -348,16 +339,6 @@ button:disabled {
   font-size: 12px;
 }
 
-.preview-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.preview-actions button {
-  margin: 0;
-}
-
 @media (max-width: 480px) {
   body { padding: 10px; place-items: start center; }
   .card { padding: 18px; border-radius: 10px; }
@@ -365,7 +346,6 @@ button:disabled {
   .source-buttons { grid-template-columns: 1fr; }
   .stats { grid-template-columns: 1fr 1fr; }
   select { max-width: 58%; }
-  .preview-actions { grid-template-columns: 1fr; }
 }
 
 .stats {

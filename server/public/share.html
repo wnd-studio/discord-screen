@@ -9,7 +9,7 @@
          dos cabeçalhos no-store guardou a versão antiga por heurística do
          navegador, e continuaria usando ela para sempre. Trocar a query força
          uma URL nova. Incremente ao publicar mudanças nesses arquivos. -->
-    <link rel="stylesheet" href="/share.css?v=15" />
+    <link rel="stylesheet" href="/share.css?v=16" />
   </head>
   <body>
     <main class="card">
@@ -102,23 +102,11 @@
           também oferecem áudio isolado. A disponibilidade depende do aplicativo escolhido.
         </p>
 
-        <button id="start" class="primary">Escolher e testar antes</button>
-      </section>
-
-      <section id="previewStep" hidden>
-        <h2 class="step-title">Confira antes de entrar ao vivo</h2>
-        <div class="preview-wrap">
-          <video id="testPreview" muted playsinline></video>
-          <video id="testCameraPreview" class="camera-preview" muted playsinline hidden></video>
-        </div>
+        <button id="start" class="primary">Escolher tela e transmitir</button>
         <div class="audio-test">
           <div class="audio-test-head"><strong id="audioTestLabel">Verificando áudio…</strong><span id="audioPercent">0%</span></div>
           <div class="audio-meter"><i id="audioMeter"></i></div>
           <p id="audioHelp">Reproduza algum som na fonte escolhida. A barra deve se movimentar.</p>
-        </div>
-        <div class="preview-actions">
-          <button id="chooseAgain" class="secondary">Escolher novamente</button>
-          <button id="goLive" class="primary">Começar transmissão</button>
         </div>
       </section>
 
@@ -152,6 +140,6 @@
       </footer>
     </main>
 
-    <script type="module" src="/share.js?v=16"></script>
+    <script type="module" src="/share.js?v=17"></script>
   </body>
 </html>

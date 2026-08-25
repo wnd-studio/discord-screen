@@ -80,8 +80,6 @@ if (!payload) {
   $('browserNote').textContent = browserGuidance();
   applyPresets();
   $('start').addEventListener('click', start);
-  $('goLive').addEventListener('click', goLive);
-  $('chooseAgain').addEventListener('click', chooseAgain);
   $('stop').addEventListener('click', () => broadcaster?.stop('Transmissão encerrada.'));
   selectSource(captureMode);
 }
@@ -117,7 +115,7 @@ function selectSource(mode) {
   $('keepOpenNote').textContent = mode === 'camera' && mobileDevice
     ? 'Mantenha esta página visível durante a transmissão. O celular pode pausar a câmera ao trocar de aplicativo ou bloquear a tela.'
     : 'Mantenha esta aba aberta enquanto transmite. Você pode voltar para o Discord — a transmissão continua.';
-  $('start').textContent = mode === 'camera' ? 'Testar câmera antes' : 'Escolher e testar antes';
+  $('start').textContent = mode === 'camera' ? 'Compartilhar câmera' : 'Escolher tela e transmitir';
   if (mode === 'camera' && mobileDevice && !query.has('q')) $('quality').value = '1000000';
   $('cameraToggle').hidden = mode === 'camera';
   $('switchMobileCamera').hidden = true;
@@ -126,7 +124,7 @@ function selectSource(mode) {
 
 function updatePrimaryPreviewMirror() {
   const mirrored = captureMode === 'camera' && facingMode === 'user';
-  for (const id of ['testPreview', 'preview']) $(id).classList.toggle('mirrored', mirrored);
+  $('preview').classList.toggle('mirrored', mirrored);
 }
 
 $('withCamera').addEventListener('change', () => {
@@ -186,16 +184,14 @@ async function start() {
 
   try {
     const prepared = await broadcaster.prepare();
-    $('testPreview').srcObject = prepared.stream;
-    $('testPreview').play().catch(() => {});
-    $('setup').hidden = true;
-    $('previewStep').hidden = false;
-    $('previewStep').insertBefore($('cameraOptions'), document.querySelector('.preview-actions'));
     if (!$('withAudio').checked) setAudioTest(0, 'Áudio não solicitado', 'Volte e marque “Incluir áudio” se quiser transmitir som.');
     else if (!prepared.hasAudio) setAudioTest(0, 'Nenhum áudio encontrado', audioMissingHelp(prepared.surface));
-    setStatus('Confira a imagem, a câmera e o medidor de áudio antes de começar.', 'ok');
+    await goLive();
   } catch (err) {
+    if (broadcaster) broadcaster.stop();
     broadcaster = null;
+    $('setup').hidden = false;
+    $('live').hidden = true;
     $('start').disabled = false;
     setStatus(err.name === 'NotAllowedError' ? 'Você cancelou a seleção de tela.' : friendlyError(err), 'error');
   }
@@ -283,10 +279,6 @@ function buildBroadcaster() {
       cameraPreview.hidden = !active;
       cameraPreview.srcObject = active ? broadcaster?.getCameraStream() ?? null : null;
       if (active) cameraPreview.play().catch(() => {});
-      const testCamera = $('testCameraPreview');
-      testCamera.hidden = !active;
-      testCamera.srcObject = active ? broadcaster?.getCameraStream() ?? null : null;
-      if (active) testCamera.play().catch(() => {});
       updateCameraPreviewLayout();
       $('cameraOptions').hidden = !active;
       if (active) loadCameras();
@@ -298,10 +290,9 @@ function buildBroadcaster() {
       $('cameraPreview').srcObject = null;
       $('cameraPreview').hidden = true;
       $('live').hidden = true;
-      $('previewStep').hidden = true;
       $('setup').hidden = false;
-      $('previewStep').insertBefore(document.querySelector('.audio-test'), document.querySelector('.preview-actions'));
       $('setup').insertBefore($('cameraOptions'), $('browserNote'));
+      $('setup').insertBefore(document.querySelector('.audio-test'), $('browserNote'));
       $('cameraOptions').hidden = !$('withCamera').checked;
       $('start').disabled = false;
       setStatus(reason);
@@ -311,12 +302,11 @@ function buildBroadcaster() {
 
 async function goLive() {
   if (!broadcaster) return;
-  $('goLive').disabled = true;
   try {
     const stream = await broadcaster.start();
     $('preview').srcObject = stream;
     $('preview').play().catch(() => {});
-    $('previewStep').hidden = true;
+    $('setup').hidden = true;
     $('live').hidden = false;
     $('live').insertBefore($('cameraOptions'), $('cameraToggle'));
     $('live').insertBefore(document.querySelector('.audio-test'), document.querySelector('.stats'));
@@ -332,24 +322,8 @@ async function goLive() {
     broadcaster = null;
     $('start').disabled = false;
     $('setup').hidden = false;
-    $('previewStep').hidden = true;
     setStatus(friendlyError(err), 'error');
-  } finally {
-    $('goLive').disabled = false;
   }
-}
-
-function chooseAgain() {
-  broadcaster?.stop();
-  broadcaster = null;
-  for (const id of ['testPreview', 'testCameraPreview']) $(id).srcObject = null;
-  $('previewStep').hidden = true;
-  $('setup').hidden = false;
-  $('previewStep').insertBefore(document.querySelector('.audio-test'), document.querySelector('.preview-actions'));
-  $('setup').insertBefore($('cameraOptions'), $('browserNote'));
-  $('cameraOptions').hidden = !$('withCamera').checked;
-  $('start').disabled = false;
-  setStatus('Escolha novamente a tela e confirme o áudio.');
 }
 
 function setAudioTest(level, label, help) {
@@ -374,10 +348,8 @@ function friendlyError(err) {
 }
 
 function updateCameraPreviewLayout() {
-  for (const id of ['cameraPreview', 'testCameraPreview']) {
-    $(id).dataset.position = $('cameraPosition').value;
-    $(id).dataset.size = $('cameraSize').value;
-  }
+  $('cameraPreview').dataset.position = $('cameraPosition').value;
+  $('cameraPreview').dataset.size = $('cameraSize').value;
 }
 
 async function loadCameras() {
@@ -425,10 +397,8 @@ $('switchMobileCamera').addEventListener('click', async () => {
     const fresh = await broadcaster.trocarCameraPrincipal(next);
     facingMode = next;
     $('mobileFacing').value = facingMode;
-    for (const id of ['preview', 'testPreview']) {
-      $(id).srcObject = fresh;
-      $(id).play().catch(() => {});
-    }
+    $('preview').srcObject = fresh;
+    $('preview').play().catch(() => {});
     updatePrimaryPreviewMirror();
     setStatus(facingMode === 'user' ? 'Câmera frontal ativa.' : 'Câmera traseira ativa.', 'ok');
   } catch (err) {
