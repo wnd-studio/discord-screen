@@ -1,6 +1,6 @@
 {
   "name": "discord-screen",
-  "version": "0.8.12",
+  "version": "0.8.13",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",

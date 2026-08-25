@@ -247,6 +247,70 @@ function renderAnalytics(analytics = {}) {
   }) : [empty('Nenhum servidor ativo neste período.') ]));
 }
 
+const percent = (value, total) => total ? `${Math.round(Number(value || 0) / Number(total) * 100)}%` : '0%';
+const eventLabels = {
+  activity_launch: 'Aberturas da Atividade', room_created: 'Salas criadas', room_deleted: 'Salas encerradas',
+  stream_started: 'Transmissões iniciadas', stream_stopped: 'Transmissões finalizadas',
+  application_authorized: 'Instalações autorizadas', application_deauthorized: 'Instalações removidas',
+};
+
+function renderTechnicalAnalytics(analytics = {}) {
+  const tech = analytics.technical || {};
+  const completed = Number(tech.completedStreams30d || 0);
+  const cards = [
+    ['Transmissões com áudio', percent(tech.streamsWithAudio30d, completed), `${number(tech.streamsWithAudio30d)} de ${number(completed)}`],
+    ['Interrompidas por conexão', percent(tech.disconnectedStreams30d, completed), `${number(tech.disconnectedStreams30d)} ocorrência(s)`],
+    ['Encerradas com a sala', number(tech.roomClosedStreams30d), 'encerramento administrativo ou da sala'],
+    ['Configuração média', tech.averageWidth30d && tech.averageHeight30d ? `${tech.averageWidth30d}×${tech.averageHeight30d}` : '—', tech.averageFps30d ? `${tech.averageFps30d} fps` : 'fps não informado'],
+    ['Bitrate médio', tech.averageBitrate30d ? `${(tech.averageBitrate30d / 1_000_000).toFixed(1)} Mb/s` : '—', 'configuração enviada pelo transmissor'],
+    ['Origem das salas', `${number(tech.callRooms30d)} calls`, `${number(tech.linkRooms30d)} salas por link`],
+    ['Instalações conhecidas', `${number(tech.installedServers)}/${number(tech.knownServers)}`, 'autorizadas / servidores observados'],
+  ];
+  $('#technicalMetrics').replaceChildren(...cards.map(([label, value, detail]) => {
+    const card = el('article', 'metric-card');
+    card.append(el('span', '', label), el('strong', '', value), el('small', '', detail));
+    return card;
+  }));
+
+  const codecs = analytics.codecs || [];
+  const codecTotal = codecs.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  $('#codecMetrics').replaceChildren(...(codecs.length ? codecs.map((item) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', String(item.codec).replace(/^avc1.*/i, 'H.264')));
+    main.append(el('span', '', `${percent(item.total, codecTotal)} das transmissões concluídas`));
+    row.append(main, el('span', 'badge', number(item.total)));
+    return row;
+  }) : [empty('Nenhuma configuração de codec registrada.') ]));
+
+  const events = analytics.eventKinds || [];
+  $('#eventMetrics').replaceChildren(...(events.length ? events.map((item) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', eventLabels[item.kind] || item.kind));
+    main.append(el('span', '', `Último registro ${date(item.lastSeen)}`));
+    row.append(main, el('span', 'badge', number(item.total)));
+    return row;
+  }) : [empty('Nenhum evento operacional no período.') ]));
+
+  const inventory = analytics.dataInventory || {};
+  const lines = [
+    ['Eventos armazenados', number(inventory.storedEvents)],
+    ['Usuários ativos · 24h', number(inventory.activeUsers24h)],
+    ['Usuários ativos · 7 dias', number(inventory.activeUsers7d)],
+    ['Servidores ativos · 7 dias', number(inventory.activeServers7d)],
+    ['Evento mais antigo', date(inventory.oldestEventAt)],
+    ['Evento mais recente', date(inventory.newestEventAt)],
+    ['Retenção automática', '90 dias'],
+    ['Nomes em eventos', '30 dias'],
+  ];
+  $('#dataInventory').replaceChildren(...lines.map(([label, value]) => {
+    const row = el('div', 'inventory-row');
+    row.append(el('span', '', label), el('strong', '', value));
+    return row;
+  }));
+}
+
 function renderServers(servers, query = '') {
   const term = query.trim().toLowerCase();
   const filtered = term ? servers.filter((server) => [
@@ -459,6 +523,7 @@ async function loadOverview(silent = false) {
     renderStats(data.totals || {});
     renderChart(data.daily || []);
     renderAnalytics(data.analytics || {});
+    renderTechnicalAnalytics(data.analytics || {});
     renderRooms(data.rooms || []);
     renderServers(data.servers || []);
     renderBlocks(data.blocks || []);

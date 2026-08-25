@@ -675,6 +675,46 @@ export class RoomRegistry extends DurableObject {
       launches: Number(row.launches || 0),
       lastSeen: Number(row.last_seen || 0),
     }));
+    const technical = this.ctx.storage.sql.exec(
+      `SELECT
+         COUNT(*) AS completed,
+         SUM(CASE WHEN json_extract(details, '$.audio') = 1 THEN 1 ELSE 0 END) AS with_audio,
+         SUM(CASE WHEN json_extract(details, '$.reason') = 'disconnect' THEN 1 ELSE 0 END) AS disconnected,
+         SUM(CASE WHEN json_extract(details, '$.reason') = 'room_closed' THEN 1 ELSE 0 END) AS room_closed,
+         AVG(CAST(json_extract(details, '$.config.width') AS REAL)) AS average_width,
+         AVG(CAST(json_extract(details, '$.config.height') AS REAL)) AS average_height,
+         AVG(CAST(json_extract(details, '$.config.bitrate') AS REAL)) AS average_bitrate,
+         AVG(CAST(json_extract(details, '$.config.framerate') AS REAL)) AS average_fps
+       FROM usage_events
+       WHERE kind = 'stream_stopped' AND created_at >= ?`, now - 30 * DAY_MS
+    ).one();
+    const codecs = this.ctx.storage.sql.exec(
+      `SELECT COALESCE(json_extract(details, '$.config.codec'), 'não informado') AS codec,
+              COUNT(*) AS total
+       FROM usage_events
+       WHERE kind = 'stream_stopped' AND created_at >= ?
+       GROUP BY codec ORDER BY total DESC LIMIT 8`, now - 30 * DAY_MS
+    ).toArray().map((row) => ({ codec: row.codec, total: Number(row.total || 0) }));
+    const eventKinds = this.ctx.storage.sql.exec(
+      `SELECT kind, COUNT(*) AS total, MAX(created_at) AS last_seen
+       FROM usage_events WHERE created_at >= ?
+       GROUP BY kind ORDER BY total DESC`, now - 30 * DAY_MS
+    ).toArray().map((row) => ({
+      kind: row.kind, total: Number(row.total || 0), lastSeen: Number(row.last_seen || 0),
+    }));
+    const dataInventory = this.ctx.storage.sql.exec(
+      `SELECT COUNT(*) AS total, MIN(created_at) AS oldest, MAX(created_at) AS newest,
+              COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS users_24h,
+              COUNT(DISTINCT CASE WHEN created_at >= ? THEN user_id END) AS users_7d,
+              COUNT(DISTINCT CASE WHEN created_at >= ? THEN guild_id END) AS guilds_7d
+       FROM usage_events`, now - DAY_MS, now - 7 * DAY_MS, now - 7 * DAY_MS
+    ).one();
+    const roomTypes = this.ctx.storage.sql.exec(
+      `SELECT
+         SUM(CASE WHEN json_extract(details, '$.isCall') = 1 THEN 1 ELSE 0 END) AS calls,
+         SUM(CASE WHEN COALESCE(json_extract(details, '$.isCall'), 0) = 0 THEN 1 ELSE 0 END) AS links
+       FROM usage_events WHERE kind = 'room_created' AND created_at >= ?`, now - 30 * DAY_MS
+    ).one();
     const totals = {
       servers: this.ctx.storage.sql.exec('SELECT COUNT(*) AS total FROM servers').one().total,
       launches: this.ctx.storage.sql.exec(
@@ -748,6 +788,32 @@ export class RoomRegistry extends DurableObject {
           longestStreamMs30d: Number(streamDuration.longest_ms || 0),
         },
         topServers,
+        technical: {
+          completedStreams30d: Number(technical.completed || 0),
+          streamsWithAudio30d: Number(technical.with_audio || 0),
+          disconnectedStreams30d: Number(technical.disconnected || 0),
+          roomClosedStreams30d: Number(technical.room_closed || 0),
+          averageWidth30d: Math.round(Number(technical.average_width || 0)),
+          averageHeight30d: Math.round(Number(technical.average_height || 0)),
+          averageBitrate30d: Math.round(Number(technical.average_bitrate || 0)),
+          averageFps30d: Math.round(Number(technical.average_fps || 0)),
+          callRooms30d: Number(roomTypes.calls || 0),
+          linkRooms30d: Number(roomTypes.links || 0),
+          knownServers: Number(totals.servers || 0),
+          installedServers: Number(this.ctx.storage.sql.exec(
+            'SELECT COUNT(*) AS total FROM servers WHERE installed = 1'
+          ).one().total || 0),
+        },
+        codecs,
+        eventKinds,
+        dataInventory: {
+          storedEvents: Number(dataInventory.total || 0),
+          oldestEventAt: Number(dataInventory.oldest || 0),
+          newestEventAt: Number(dataInventory.newest || 0),
+          activeUsers24h: Number(dataInventory.users_24h || 0),
+          activeUsers7d: Number(dataInventory.users_7d || 0),
+          activeServers7d: Number(dataInventory.guilds_7d || 0),
+        },
       },
       changelog: { channels: changelogChannels, history: changelogHistory },
     });

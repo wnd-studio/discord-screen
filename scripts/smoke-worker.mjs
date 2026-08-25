@@ -350,6 +350,9 @@ if (testAdmin) {
   assert.ok(Array.isArray(finalOverview.data.analytics.daily));
   assert.ok(finalOverview.data.analytics.hourly.length <= 24);
   assert.ok(finalOverview.data.analytics.summary.launches7d >= 1);
+  assert.ok(finalOverview.data.analytics.technical.completedStreams30d >= 1);
+  assert.ok(Array.isArray(finalOverview.data.analytics.eventKinds));
+  assert.ok(finalOverview.data.analytics.dataInventory.storedEvents >= 1);
   assert.equal('userId' in finalOverview.data.analytics.summary, false);
   assert.equal(finalOverview.data.servers.some((server) => server.guildId === '987654321098765432'), true);
   assert.equal('authorizedByName' in finalOverview.data.servers[0], true);
