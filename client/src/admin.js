@@ -182,6 +182,71 @@ function renderRooms(rooms, query = '') {
   $('#rooms').replaceChildren(...(filtered.length ? filtered.map(roomCard) : [empty('Nenhuma sala corresponde ao filtro.') ]));
 }
 
+function changeLabel(current, previous) {
+  const before = Number(previous || 0);
+  const now = Number(current || 0);
+  if (!before) return now ? 'novo movimento' : 'sem atividade';
+  const percent = Math.round(((now - before) / before) * 100);
+  return `${percent >= 0 ? '+' : ''}${percent}% vs. 7 dias anteriores`;
+}
+
+function renderAnalytics(analytics = {}) {
+  const summary = analytics.summary || {};
+  const cards = [
+    ['Aberturas · 7 dias', number(summary.launches7d), changeLabel(summary.launches7d, summary.previousLaunches7d)],
+    ['Transmissões · 7 dias', number(summary.streams7d), changeLabel(summary.streams7d, summary.previousStreams7d)],
+    ['Salas criadas · 30 dias', number(summary.rooms30d), 'somente contagem agregada'],
+    ['Servidores ativos · 30 dias', number(summary.activeServers30d), 'com pelo menos uma abertura'],
+    ['Duração média', duration(summary.averageStreamMs30d), `${number(summary.completedStreams30d)} transmissões concluídas`],
+    ['Maior transmissão', duration(summary.longestStreamMs30d), 'nos últimos 30 dias'],
+  ];
+  $('#analyticsSummary').replaceChildren(...cards.map(([label, value, detail]) => {
+    const card = el('article', 'metric-card');
+    card.append(el('span', '', label), el('strong', '', value), el('small', '', detail));
+    return card;
+  }));
+
+  const daily = analytics.daily || [];
+  const maxDaily = Math.max(1, ...daily.flatMap((item) => [Number(item.launches), Number(item.streams)]));
+  $('#activityChart').replaceChildren(...(daily.length ? daily.map((item) => {
+    const column = el('div', 'trend-column');
+    const bars = el('div', 'trend-bars');
+    const launches = el('i', 'trend-bar launches');
+    launches.style.height = `${Math.max(2, Number(item.launches) / maxDaily * 100)}%`;
+    launches.title = `${number(item.launches)} abertura(s)`;
+    const streams = el('i', 'trend-bar streams');
+    streams.style.height = `${Math.max(2, Number(item.streams) / maxDaily * 100)}%`;
+    streams.title = `${number(item.streams)} transmissão(ões)`;
+    bars.append(launches, streams);
+    column.append(bars, el('span', '', item.day.slice(8)));
+    return column;
+  }) : [empty('Ainda não há atividade suficiente para o gráfico.') ]));
+
+  const byHour = new Map((analytics.hourly || []).map((item) => [Number(item.hour), Number(item.launches)]));
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, launches: byHour.get(hour) || 0 }));
+  const maxHour = Math.max(1, ...hours.map((item) => item.launches));
+  $('#hourlyChart').replaceChildren(...hours.map((item) => {
+    const row = el('div', 'hour-row');
+    const label = el('span', '', `${String(item.hour).padStart(2, '0')}h`);
+    const track = el('div', 'hour-track');
+    const bar = el('i', 'hour-bar');
+    bar.style.width = `${item.launches / maxHour * 100}%`;
+    track.append(bar);
+    row.append(label, track, el('strong', '', number(item.launches)));
+    return row;
+  }));
+
+  const top = analytics.topServers || [];
+  $('#topServers').replaceChildren(...(top.length ? top.map((server, index) => {
+    const row = el('div', 'stack-row');
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', `${index + 1}. ${server.name}`));
+    main.append(el('span', '', `Última atividade ${date(server.lastSeen)}`));
+    row.append(main, el('span', 'badge', `${number(server.launches)} abertura(s)`));
+    return row;
+  }) : [empty('Nenhum servidor ativo neste período.') ]));
+}
+
 function renderServers(servers, query = '') {
   const term = query.trim().toLowerCase();
   const filtered = term ? servers.filter((server) => [server.guildId, server.name, server.lastChannelName]
@@ -386,6 +451,7 @@ async function loadOverview(silent = false) {
     currentOverview = data;
     renderStats(data.totals || {});
     renderChart(data.daily || []);
+    renderAnalytics(data.analytics || {});
     renderRooms(data.rooms || []);
     renderServers(data.servers || []);
     renderBlocks(data.blocks || []);

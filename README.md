@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.8.9-22C55E?style=flat-square" alt="Versão 0.8.9">
+    <img src="https://img.shields.io/badge/versao-0.8.10-22C55E?style=flat-square" alt="Versão 0.8.10">
   </p>
 
   <p>
@@ -225,6 +225,7 @@ Os detalhes do protocolo e do ciclo de uma transmissão estão em [docs/como-fun
 - senhas de sala não são armazenadas em texto puro;
 - áudio e vídeo não são gravados em banco de dados ou filesystem;
 - o histórico contém somente metadados operacionais e eventos antigos são removidos depois de 90 dias;
+- métricas administrativas são calculadas de forma agregada a partir desses eventos, sem histórico individual de comportamento;
 - o painel `/admin` usa cookie seguro e aceita somente o proprietário/equipe da aplicação ou IDs explicitamente autorizados;
 - eventos do Discord são aceitos apenas após validação da assinatura Ed25519;
 - o frontend só recebe as informações necessárias para a sessão atual.

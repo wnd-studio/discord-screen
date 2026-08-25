@@ -18,6 +18,8 @@
 - Histórico de publicações: 365 dias.
 - Bloqueios expirados e contadores de limite antigos: removidos automaticamente.
 - O conteúdo de tela e áudio não é gravado pelo serviço.
+- O painel mostra contagens, tendências e durações agregadas; não oferece histórico de comportamento por usuário.
+- Não são coletados navegador, modelo do dispositivo, localização ou conteúdo para alimentar as métricas.
 
 ## Relato responsável
 

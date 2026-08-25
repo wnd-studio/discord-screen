@@ -347,6 +347,10 @@ if (testAdmin) {
   assert.equal(finalOverview.response.status, 200);
   assert.ok(finalOverview.data.audit.length >= 4);
   assert.ok(finalOverview.data.totals.launches >= 1);
+  assert.ok(Array.isArray(finalOverview.data.analytics.daily));
+  assert.ok(finalOverview.data.analytics.hourly.length <= 24);
+  assert.ok(finalOverview.data.analytics.summary.launches7d >= 1);
+  assert.equal('userId' in finalOverview.data.analytics.summary, false);
   assert.equal(finalOverview.data.servers.some((server) => server.guildId === '987654321098765432'), true);
   adminViewer.close();
 }

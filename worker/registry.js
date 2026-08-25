@@ -604,6 +604,59 @@ export class RoomRegistry extends DurableObject {
        FROM usage_events WHERE kind = 'activity_launch' AND created_at >= ?
        GROUP BY day ORDER BY day`, now - 14 * DAY_MS
     ).toArray();
+    const analyticsDaily = this.ctx.storage.sql.exec(
+      `SELECT date(created_at / 1000, 'unixepoch') AS day,
+              SUM(CASE WHEN kind = 'activity_launch' THEN 1 ELSE 0 END) AS launches,
+              SUM(CASE WHEN kind = 'room_created' THEN 1 ELSE 0 END) AS rooms,
+              SUM(CASE WHEN kind = 'stream_started' THEN 1 ELSE 0 END) AS streams,
+              SUM(CASE WHEN kind = 'stream_stopped' THEN COALESCE(duration_ms, 0) ELSE 0 END) AS streamed_ms
+       FROM usage_events WHERE created_at >= ?
+       GROUP BY day ORDER BY day`, now - 30 * DAY_MS
+    ).toArray().map((row) => ({
+      day: row.day,
+      launches: Number(row.launches || 0),
+      rooms: Number(row.rooms || 0),
+      streams: Number(row.streams || 0),
+      streamedMs: Number(row.streamed_ms || 0),
+    }));
+    const hourly = this.ctx.storage.sql.exec(
+      `SELECT CAST(strftime('%H', created_at / 1000, 'unixepoch', '-3 hours') AS INTEGER) AS hour,
+              COUNT(*) AS launches
+       FROM usage_events
+       WHERE kind = 'activity_launch' AND created_at >= ?
+       GROUP BY hour ORDER BY hour`, now - 30 * DAY_MS
+    ).toArray().map((row) => ({ hour: Number(row.hour), launches: Number(row.launches || 0) }));
+    const streamDuration = this.ctx.storage.sql.exec(
+      `SELECT COUNT(*) AS completed,
+              COALESCE(AVG(duration_ms), 0) AS average_ms,
+              COALESCE(MAX(duration_ms), 0) AS longest_ms
+       FROM usage_events
+       WHERE kind = 'stream_stopped' AND duration_ms IS NOT NULL AND created_at >= ?`, now - 30 * DAY_MS
+    ).one();
+    const activitySummary = this.ctx.storage.sql.exec(
+      `SELECT
+         SUM(CASE WHEN kind = 'activity_launch' AND created_at >= ? THEN 1 ELSE 0 END) AS launches_7d,
+         SUM(CASE WHEN kind = 'activity_launch' AND created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS launches_previous_7d,
+         SUM(CASE WHEN kind = 'stream_started' AND created_at >= ? THEN 1 ELSE 0 END) AS streams_7d,
+         SUM(CASE WHEN kind = 'stream_started' AND created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) AS streams_previous_7d,
+         SUM(CASE WHEN kind = 'room_created' AND created_at >= ? THEN 1 ELSE 0 END) AS rooms_30d
+       FROM usage_events WHERE created_at >= ?`,
+      now - 7 * DAY_MS, now - 14 * DAY_MS, now - 7 * DAY_MS,
+      now - 7 * DAY_MS, now - 14 * DAY_MS, now - 7 * DAY_MS,
+      now - 30 * DAY_MS, now - 30 * DAY_MS
+    ).one();
+    const topServers = this.ctx.storage.sql.exec(
+      `SELECT e.guild_id, COALESCE(s.name, 'Servidor sem nome') AS name,
+              COUNT(*) AS launches, MAX(e.created_at) AS last_seen
+       FROM usage_events e LEFT JOIN servers s ON s.guild_id = e.guild_id
+       WHERE e.kind = 'activity_launch' AND e.guild_id IS NOT NULL AND e.created_at >= ?
+       GROUP BY e.guild_id, s.name ORDER BY launches DESC, last_seen DESC LIMIT 10`, now - 30 * DAY_MS
+    ).toArray().map((row) => ({
+      guildId: row.guild_id,
+      name: row.name,
+      launches: Number(row.launches || 0),
+      lastSeen: Number(row.last_seen || 0),
+    }));
     const totals = {
       servers: this.ctx.storage.sql.exec('SELECT COUNT(*) AS total FROM servers').one().total,
       launches: this.ctx.storage.sql.exec(
@@ -659,6 +712,25 @@ export class RoomRegistry extends DurableObject {
     return json({
       generatedAt: now, totals, rooms, servers, blocks, audit, daily, maintenance,
       supporters,
+      analytics: {
+        daily: analyticsDaily,
+        hourly,
+        summary: {
+          launches7d: Number(activitySummary.launches_7d || 0),
+          previousLaunches7d: Number(activitySummary.launches_previous_7d || 0),
+          streams7d: Number(activitySummary.streams_7d || 0),
+          previousStreams7d: Number(activitySummary.streams_previous_7d || 0),
+          rooms30d: Number(activitySummary.rooms_30d || 0),
+          activeServers30d: Number(this.ctx.storage.sql.exec(
+            `SELECT COUNT(DISTINCT guild_id) AS total FROM usage_events
+             WHERE kind = 'activity_launch' AND guild_id IS NOT NULL AND created_at >= ?`, now - 30 * DAY_MS
+          ).one().total || 0),
+          completedStreams30d: Number(streamDuration.completed || 0),
+          averageStreamMs30d: Number(streamDuration.average_ms || 0),
+          longestStreamMs30d: Number(streamDuration.longest_ms || 0),
+        },
+        topServers,
+      },
       changelog: { channels: changelogChannels, history: changelogHistory },
     });
   }

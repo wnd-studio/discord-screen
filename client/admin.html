@@ -55,6 +55,41 @@
 
       <section id="stats" class="stats" aria-label="Resumo"></section>
 
+      <section class="panel analytics-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Métricas agregadas</p><h2>Uso e tendências</h2></div>
+          <span class="panel-note">Janela móvel de 30 dias</span>
+        </div>
+        <div id="analyticsSummary" class="analytics-summary"></div>
+        <div class="analytics-layout">
+          <div>
+            <h3 class="subheading">Atividade diária</h3>
+            <div id="activityChart" class="trend-chart" aria-label="Aberturas e transmissões por dia"></div>
+          </div>
+          <div>
+            <h3 class="subheading">Horários com mais aberturas</h3>
+            <div id="hourlyChart" class="hourly-chart" aria-label="Aberturas por horário de Brasília"></div>
+          </div>
+        </div>
+        <div class="analytics-layout lower">
+          <div>
+            <h3 class="subheading">Servidores mais ativos</h3>
+            <div id="topServers" class="stack"></div>
+          </div>
+          <aside class="privacy-card">
+            <p class="eyebrow">Privacidade por padrão</p>
+            <h3>O painel mede uso, não conteúdo</h3>
+            <ul>
+              <li>Não grava telas, áudio ou mensagens.</li>
+              <li>Não mostra histórico individual de usuários.</li>
+              <li>Não armazena endereço IP em formato legível.</li>
+              <li>Eventos são apagados após 90 dias; nomes, após 30 dias.</li>
+            </ul>
+            <p>Essas medidas reduzem a coleta ao necessário. A conformidade completa também depende da política de privacidade e dos processos do projeto.</p>
+          </aside>
+        </div>
+      </section>
+
       <section class="panel operations-panel">
         <div class="panel-head">
           <div><p class="eyebrow">Operação</p><h2>Saúde e segurança</h2></div>
