@@ -522,6 +522,19 @@ export class RoomRegistry extends DurableObject {
       return json({ roomIds: rows.map((row) => row.id) });
     }
 
+    if (url.pathname === '/admin/server-authorizer') {
+      const guildId = cleanText(payload.guildId, 30);
+      const userId = cleanText(payload.userId, 30);
+      const userName = cleanText(payload.userName, 64);
+      if (!guildId || !userId || !userName) return json({ error: 'Dados inválidos.' }, 400);
+      this.ctx.storage.sql.exec(
+        `UPDATE servers SET authorized_by_name = ?
+         WHERE guild_id = ? AND authorized_by = ? AND authorized_by_name IS NULL`,
+        userName, guildId, userId
+      );
+      return json({ ok: true });
+    }
+
     if (url.pathname === '/admin/overview') return this.adminOverview();
 
     return new Response('Not found', { status: 404 });

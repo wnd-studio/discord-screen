@@ -295,6 +295,22 @@ async function adminApi(request, env, url, data) {
     ]);
     const webhookConfigured = Boolean(application?.event_webhooks_types?.length)
       || application?.event_webhooks_status === 2;
+    if (env.DISCORD_BOT_TOKEN) {
+      const missingAuthorizers = (overview.data.servers || [])
+        .filter((server) => server.authorizedBy && !server.authorizedByName)
+        .slice(0, 10);
+      await Promise.all(missingAuthorizers.map(async (server) => {
+        const result = await discordBot(env, `/users/${encodeURIComponent(server.authorizedBy)}`);
+        const userName = result.ok
+          ? String(result.data.global_name || result.data.username || '').trim().slice(0, 64)
+          : '';
+        if (!userName) return;
+        server.authorizedByName = userName;
+        await internal(registry(env), '/admin/server-authorizer', {
+          guildId: server.guildId, userId: server.authorizedBy, userName,
+        });
+      }));
+    }
     const alerts = [];
     if (!bot.valid) alerts.push({ level: 'error', message: 'O bot do Discord não está respondendo corretamente.' });
     if (!webhookConfigured) alerts.push({ level: 'warning', message: 'O Discord ainda não confirmou o webhook de eventos.' });
