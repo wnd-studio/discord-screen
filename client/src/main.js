@@ -43,6 +43,7 @@ const PIX_KEY = 'b4be56b2-502c-43bc-b716-b66c9c883737';
 const PIX_PAYLOAD = '00020101021126580014br.gov.bcb.pix0136b4be56b2-502c-43bc-b716-b66c9c8837375204000053039865802BR5920WENDELL D M DA SILVA6010ANANINDEUA62070503***630493C0';
 // Transmissão nascida aqui dentro, quando o Discord permite capturar no iframe.
 let myBroadcast = null;
+let myAudioState = { active: false, source: null, detected: false, silentSince: 0 };
 // Volume de tudo que chega, de 0 a 1. Vale para todas as telas e sobrevive a
 // trocar de sala: é preferência de quem assiste, não estado de uma transmissão.
 // Zero é o mudo — um número só, em vez de dois estados que precisam concordar.
@@ -91,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.7';
+const NEWS_VERSION = '0.8.8';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -156,6 +157,56 @@ function openDiagnostics() {
 
 function closeDiagnostics() {
   $('diagnosticModal').hidden = true;
+}
+
+function audioSourceLabel(source) {
+  return source === 'microphone' ? 'Microfone'
+    : source === 'tab' ? 'Áudio da aba'
+      : source === 'window' ? 'Áudio da janela'
+        : source === 'system' ? 'Áudio do sistema'
+          : 'Áudio';
+}
+
+function audioGuidance() {
+  const ua = navigator.userAgent;
+  if (/Firefox/i.test(ua)) {
+    return 'Firefox: o áudio depende das opções oferecidas pelo navegador. Para maior compatibilidade, compartilhe uma aba com som.';
+  }
+  if (/Edg\//i.test(ua)) {
+    return 'Edge: marque “Compartilhar áudio” no seletor. Uma aba costuma ser mais confiável; algumas janelas também oferecem áudio isolado.';
+  }
+  if (/Chrome|Chromium|CriOS|OPR|Brave/i.test(ua)) {
+    return 'Chrome/Chromium: marque “Compartilhar áudio”. Prefira uma aba; ao usar a tela inteira, a voz do Discord pode voltar como eco.';
+  }
+  if (/Safari/i.test(ua)) {
+    return 'Safari: o sistema pode não oferecer áudio junto da tela. Se a opção não aparecer, transmita somente a imagem.';
+  }
+  return 'A captura de som depende da fonte oferecida pelo navegador. Uma aba costuma ser a opção mais compatível.';
+}
+
+function resetMyAudioState() {
+  myAudioState = { active: false, source: null, detected: false, silentSince: 0 };
+  renderMyAudioState();
+}
+
+function renderMyAudioState() {
+  const pill = $('audioStatusPill');
+  pill.hidden = !myBroadcast;
+  if (!myBroadcast) return;
+  const quietLong = myAudioState.active && !myAudioState.detected
+    && myAudioState.silentSince && Date.now() - myAudioState.silentSince >= 5000;
+  pill.classList.toggle('ok', myAudioState.active && myAudioState.detected);
+  pill.classList.toggle('error', !myAudioState.active || quietLong);
+  pill.textContent = !myAudioState.active
+    ? 'Sem áudio'
+    : myAudioState.detected
+      ? `${audioSourceLabel(myAudioState.source)} ✓`
+      : quietLong ? 'Áudio não detectado' : `${audioSourceLabel(myAudioState.source)} · aguardando som`;
+  pill.title = myAudioState.active
+    ? quietLong
+      ? 'Nenhum som foi detectado. Reproduza áudio na fonte ou clique para trocar a fonte.'
+      : 'Reproduza algum som. Quando ele for detectado, este indicador ficará verde.'
+    : 'A fonte escolhida não forneceu áudio. Clique para corrigir.';
 }
 
 /**
@@ -907,6 +958,7 @@ function renderBar() {
   // A engrenagem só aparece para transmissão nascida aqui: a que roda na aba
   // externa é configurada por lá, e daqui não dá para mexer nela.
   $('liveSettings').hidden = !myBroadcast;
+  renderMyAudioState();
   // Pediram som e ele foi barrado: a engrenagem pisca, porque é atrás dela que
   // está a saída. Sem isso o aviso passa no toast e ninguém acha o caminho.
   const somPendente = Boolean(myBroadcast?.somBloqueado?.());
@@ -2039,6 +2091,7 @@ function iAmBroadcasting() {
 function stopMyBroadcast() {
   myBroadcast?.stop();
   myBroadcast = null;
+  resetMyAudioState();
   if (participants.some((p) => p.broadcasting && p.id === session?.user?.id)) {
     ws?.send(JSON.stringify({ type: 'stop-broadcast' }));
   }
@@ -2093,6 +2146,10 @@ function openModal(mode) {
     audioDescription.textContent = 'O navegador pedirá sua autorização antes de abrir o microfone.';
     $('modalNote').textContent = 'A câmera abrirá no navegador. Mantenha a página aberta durante a transmissão.';
   }
+  $('mAudioGuide').textContent = mobileDevice
+    ? 'O microfone será testado assim que a transmissão começar.'
+    : audioGuidance();
+  $('mAudioGuide').hidden = !$('mAudio').checked && !live;
 
   $('modalSom').hidden = !live || !myBroadcast;
   if (live && myBroadcast) {
@@ -2116,6 +2173,12 @@ function openModal(mode) {
 }
 
 $('liveSettings').addEventListener('click', () => openModal('live'));
+$('audioStatusPill').addEventListener('click', () => {
+  if (myBroadcast) openModal('live');
+});
+$('mAudio').addEventListener('change', () => {
+  $('mAudioGuide').hidden = !$('mAudio').checked;
+});
 
 /** Espelha o volume atual no botão e no cursor, sem tocar no áudio. */
 function renderVolume() {
@@ -2234,14 +2297,33 @@ async function broadcastFromHere() {
     onAviso: (m) => toast(m, true),
     onPerformance: (m) => toast(m),
     onCameraStatus: () => renderBar(),
+    onAudioStatus: ({ active, source }) => {
+      myAudioState.active = active;
+      myAudioState.source = source || null;
+      myAudioState.detected = active ? myAudioState.detected : false;
+      myAudioState.silentSince = active ? Date.now() : 0;
+      renderMyAudioState();
+    },
+    onAudioLevel: ({ level, silent, unavailable }) => {
+      if (unavailable || !myAudioState.active) return;
+      if (!silent && level > 0.015) {
+        myAudioState.detected = true;
+        myAudioState.silentSince = 0;
+      } else if (!myAudioState.detected && !myAudioState.silentSince) {
+        myAudioState.silentSince = Date.now();
+      }
+      renderMyAudioState();
+    },
     onEnd: () => {
       myBroadcast = null;
+      resetMyAudioState();
       renderBar();
     },
   });
 
   const startedAt = performance.now();
   try {
+    resetMyAudioState();
     await b.start();
     myBroadcast = b;
     closeModal();

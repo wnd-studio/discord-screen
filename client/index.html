@@ -12,6 +12,7 @@
       <div class="topbar">
         <div id="people" class="pill" title="Pessoas na sala"></div>
         <div id="roomPill" class="pill room-pill" hidden></div>
+        <button id="audioStatusPill" class="pill audio-status-pill" hidden>Áudio</button>
         <button id="topDiagnostics" class="pill diagnostic-trigger" title="Diagnóstico do navegador">Diagnóstico</button>
         <div id="connectionPill" class="pill connection-pill" hidden>Conectando…</div>
       </div>
@@ -318,6 +319,8 @@
             </span>
           </label>
 
+          <div id="mAudioGuide" class="audio-guide" hidden></div>
+
           <label class="field-check">
             <input id="mCamera" type="checkbox" />
             <span>
@@ -440,26 +443,26 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">BUILD 0.8.7</div>
-          <h2 id="newsTitle">Mais estabilidade</h2>
-          <p class="modal-sub">Diagnóstico claro e reconexão que não fica presa para sempre.</p>
+          <div class="news-kicker">BUILD 0.8.8</div>
+          <h2 id="newsTitle">Áudio mais claro</h2>
+          <p class="modal-sub">Agora fica mais fácil saber se o som realmente está chegando.</p>
 
           <ul class="news-list">
             <li>
-              <span class="news-icon">🩺</span>
-              <div><strong>Diagnóstico integrado</strong><p>Confira navegador, internet, captura de tela, câmera e modo de vídeo em poucos segundos.</p></div>
+              <span class="news-icon">🔊</span>
+              <div><strong>Som confirmado</strong><p>Um indicador mostra a fonte escolhida e fica verde quando o áudio é detectado.</p></div>
             </li>
             <li>
-              <span class="news-icon">🔄</span>
-              <div><strong>Reconexão controlada</strong><p>Agora as tentativas são numeradas, têm limite e oferecem um botão para tentar imediatamente.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">📡</span>
-              <div><strong>Internet reconhecida</strong><p>O aplicativo diferencia uma queda do servidor de um dispositivo realmente sem conexão.</p></div>
+              <span class="news-icon">🧪</span>
+              <div><strong>Teste compacto</strong><p>Reproduza um som e confira o medidor durante a transmissão, sem uma prévia grande.</p></div>
             </li>
             <li>
               <span class="news-icon">🧭</span>
-              <div><strong>Erros mais claros</strong><p>As telas de recuperação agora informam o que está acontecendo e como continuar.</p></div>
+              <div><strong>Ajuda para seu navegador</strong><p>Chrome, Edge, Firefox e Safari recebem orientações adequadas às opções disponíveis.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">🎧</span>
+              <div><strong>Alerta de eco</strong><p>Ao compartilhar todo o sistema, o aplicativo explica como evitar que a voz do Discord retorne.</p></div>
             </li>
           </ul>
 

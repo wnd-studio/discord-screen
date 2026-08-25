@@ -184,8 +184,8 @@ async function start() {
 
   try {
     const prepared = await broadcaster.prepare();
-    if (!$('withAudio').checked) setAudioTest(0, 'Áudio não solicitado', 'Volte e marque “Incluir áudio” se quiser transmitir som.');
-    else if (!prepared.hasAudio) setAudioTest(0, 'Nenhum áudio encontrado', audioMissingHelp(prepared.surface));
+    document.querySelector('.audio-test').hidden = !$('withAudio').checked;
+    if ($('withAudio').checked && !prepared.hasAudio) setAudioTest(0, 'Nenhum áudio encontrado', audioMissingHelp(prepared.surface));
     await goLive();
   } catch (err) {
     if (broadcaster) broadcaster.stop();
@@ -266,6 +266,9 @@ function buildBroadcaster() {
             ? 'Áudio da janela ativo'
             : 'Áudio do sistema ativo'
         : 'Sem áudio';
+      if (active && !audioWasDetected) {
+        setAudioTest(0, `${audioSourceName(source)} selecionado`, audioSourceHelp(source));
+      }
       // Mesmo sem áudio inicial, a pessoa consegue corrigir sem reiniciar vídeo.
       $('somAba').hidden = captureMode === 'camera' || (active && source === 'tab');
     },
@@ -293,6 +296,7 @@ function buildBroadcaster() {
       $('setup').hidden = false;
       $('setup').insertBefore($('cameraOptions'), $('browserNote'));
       $('setup').insertBefore(document.querySelector('.audio-test'), $('browserNote'));
+      document.querySelector('.audio-test').hidden = true;
       $('cameraOptions').hidden = !$('withCamera').checked;
       $('start').disabled = false;
       setStatus(reason);
@@ -332,6 +336,21 @@ function setAudioTest(level, label, help) {
   $('audioPercent').textContent = `${percent}%`;
   $('audioTestLabel').textContent = label;
   $('audioHelp').textContent = help;
+}
+
+function audioSourceName(source) {
+  return source === 'microphone' ? 'Microfone'
+    : source === 'tab' ? 'Áudio da aba'
+      : source === 'window' ? 'Áudio da janela'
+        : 'Áudio do sistema';
+}
+
+function audioSourceHelp(source) {
+  if (source === 'system') return 'Reproduza um som para testar. Se a voz do Discord voltar como eco, troque para uma aba ou janela compatível.';
+  if (source === 'window') return 'Reproduza um som nessa janela. Se a barra não se mover, a janela escolhida não oferece áudio isolado.';
+  if (source === 'tab') return 'Reproduza algum som nessa aba. Esta é a opção mais confiável.';
+  if (source === 'microphone') return 'Fale perto do microfone. A barra deve se movimentar.';
+  return 'Reproduza algum som na fonte escolhida. A barra deve se movimentar.';
 }
 
 function audioMissingHelp(surface) {

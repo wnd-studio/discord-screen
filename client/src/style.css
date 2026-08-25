@@ -835,6 +835,32 @@ button {
   border-color: rgba(240, 178, 50, 0.55);
 }
 
+.audio-status-pill {
+  border: 1px solid rgba(240, 178, 50, 0.55);
+  color: #f8d477;
+}
+
+.audio-status-pill.ok {
+  border-color: rgba(35, 165, 90, 0.45);
+  color: #c5f6d5;
+}
+
+.audio-status-pill.error {
+  border-color: rgba(237, 66, 69, 0.55);
+  color: #ffb3b5;
+}
+
+.audio-guide {
+  margin: -4px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(240, 178, 50, 0.28);
+  border-radius: 10px;
+  background: rgba(240, 178, 50, 0.08);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
 .empty > .btn { margin-top: 14px; }
 .diagnostic-card { max-width: 520px; }
 .diagnostic-list {
