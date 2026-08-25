@@ -121,6 +121,11 @@
 
       <!-- Barra de controles. Ocupa espaço no layout: não passa por cima da tela -->
       <div class="bottombar">
+        <div id="roomHint" class="room-hint" hidden>
+          <div><strong>Pronto para começar?</strong><span>Compartilhe sua tela em poucos cliques.</span></div>
+          <button id="roomHintShare" class="btn go">Compartilhar agora</button>
+          <button id="roomHintClose" class="hint-close" aria-label="Fechar dica">×</button>
+        </div>
         <div id="panel" class="panel" hidden>
           <div class="panel-row"><span>Transmitindo</span><strong id="pWho">—</strong></div>
           <div class="panel-row"><span>Latência</span><strong id="pLag">—</strong></div>
@@ -272,6 +277,16 @@
           <h2 id="modalTitle">Compartilhar sua tela</h2>
           <p id="modalSub" class="modal-sub">Escolha a tela e comece a transmitir.</p>
 
+          <div id="shareSteps" class="share-steps">
+            <span><b>1</b> Escolha um modo</span><span><b>2</b> Selecione a fonte</span><span><b>3</b> Entre ao vivo</span>
+          </div>
+
+          <div id="sharePresets" class="share-presets" aria-label="Modos rápidos">
+            <button type="button" data-preset="economy"><strong>Econômico</strong><small>internet limitada</small></button>
+            <button type="button" data-preset="balanced"><strong>Recomendado</strong><small>aulas e reuniões</small></button>
+            <button type="button" data-preset="motion"><strong>Movimento</strong><small>jogos e vídeos</small></button>
+          </div>
+
           <label class="field">
             <span>Qualidade</span>
             <select id="mQuality">
@@ -320,6 +335,8 @@
           </label>
 
           <div id="mAudioGuide" class="audio-guide" hidden></div>
+
+          <div id="mSummary" class="share-summary" aria-live="polite"></div>
 
           <label class="field-check">
             <input id="mCamera" type="checkbox" />
@@ -443,30 +460,30 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">BUILD 0.8.8</div>
-          <h2 id="newsTitle">Áudio mais claro</h2>
-          <p class="modal-sub">Agora fica mais fácil saber se o som realmente está chegando.</p>
+          <div class="news-kicker">BUILD 0.8.14</div>
+          <h2 id="newsTitle">Transmitir ficou mais simples</h2>
+          <p class="modal-sub">Menos dúvidas antes de entrar ao vivo e escolhas mais rápidas.</p>
 
           <ul class="news-list">
             <li>
-              <span class="news-icon">🔊</span>
-              <div><strong>Som confirmado</strong><p>Um indicador mostra a fonte escolhida e fica verde quando o áudio é detectado.</p></div>
+              <span class="news-icon">⚡</span>
+              <div><strong>Modos rápidos</strong><p>Escolha Econômico, Recomendado ou Movimento sem precisar entender bitrate e FPS.</p></div>
             </li>
             <li>
-              <span class="news-icon">🧪</span>
-              <div><strong>Teste compacto</strong><p>Reproduza um som e confira o medidor durante a transmissão, sem uma prévia grande.</p></div>
+              <span class="news-icon">✅</span>
+              <div><strong>Resumo antes de transmitir</strong><p>Veja qualidade, fluidez, áudio e câmera num único lugar antes de começar.</p></div>
             </li>
             <li>
               <span class="news-icon">🧭</span>
-              <div><strong>Ajuda para seu navegador</strong><p>Chrome, Edge, Firefox e Safari recebem orientações adequadas às opções disponíveis.</p></div>
+              <div><strong>Passos claros</strong><p>O aplicativo mostra o que acontecerá desde a escolha da fonte até entrar ao vivo.</p></div>
             </li>
             <li>
-              <span class="news-icon">🎧</span>
-              <div><strong>Alerta de eco</strong><p>Ao compartilhar todo o sistema, o aplicativo explica como evitar que a voz do Discord retorne.</p></div>
+              <span class="news-icon">💡</span>
+              <div><strong>Ajuda na primeira sala</strong><p>Uma dica discreta mostra onde começar e desaparece depois de usada.</p></div>
             </li>
           </ul>
 
-          <p class="news-footnote">Firefox, Safari e transmissão móvel continuam em fase de testes. O áudio de uma janela depende do navegador e do aplicativo selecionado.</p>
+          <p class="news-footnote">A disponibilidade do áudio ainda depende do navegador e da fonte escolhida.</p>
           <div class="modal-actions">
             <button id="newsClose" class="btn go">Entendi</button>
           </div>

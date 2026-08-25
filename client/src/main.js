@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.8';
+const NEWS_VERSION = '0.8.14';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -944,6 +944,7 @@ function renderBar() {
 
   const casters = participants.filter((p) => p.broadcasting);
   const iAmCasting = iAmBroadcasting();
+  $('roomHint').hidden = !inRoom() || casters.length > 0 || read('roomHintDismissed') === '1';
 
   const btn = $('share');
   btn.classList.toggle('go', !iAmCasting);
@@ -2106,6 +2107,8 @@ $('share').addEventListener('click', () => {
     return;
   }
 
+  store('roomHintDismissed', '1');
+  $('roomHint').hidden = true;
   openModal('start');
 });
 
@@ -2114,6 +2117,39 @@ $('share').addEventListener('click', () => {
  * já vêm com os valores atuais e o botão aplica em vez de iniciar.
  */
 let modalMode = 'start';
+
+const sharePresets = {
+  economy: { bitrate: '1000000', fps: '15', economy: true },
+  balanced: { bitrate: '2500000', fps: '30', economy: false },
+  motion: { bitrate: '5000000', fps: '60', economy: false },
+};
+
+function selectedPreset() {
+  return Object.entries(sharePresets).find(([, preset]) =>
+    preset.bitrate === $('mQuality').value && preset.fps === $('mFps').value
+      && preset.economy === $('mEconomy').checked
+  )?.[0] || null;
+}
+
+function renderShareChoices() {
+  const preset = selectedPreset();
+  for (const button of document.querySelectorAll('#sharePresets button')) {
+    button.classList.toggle('selected', button.dataset.preset === preset);
+  }
+  const quality = $('mEconomy').checked ? 'até 720p' : 'até 1080p';
+  const audio = $('mAudio').checked ? (mobileDevice ? 'microfone ligado' : 'som solicitado') : 'sem áudio';
+  const camera = !mobileDevice && $('mCamera').checked ? ' · câmera ligada' : '';
+  $('mSummary').textContent = `${quality} · ${$('mFps').value} fps · ${audio}${camera}`;
+}
+
+function applySharePreset(name) {
+  const preset = sharePresets[name];
+  if (!preset) return;
+  $('mQuality').value = preset.bitrate;
+  $('mFps').value = preset.fps;
+  $('mEconomy').checked = preset.economy;
+  renderShareChoices();
+}
 
 function openModal(mode) {
   modalMode = mode;
@@ -2168,9 +2204,26 @@ function openModal(mode) {
   }
 
   $('mCameraOptions').hidden = !$('mCamera').checked;
+  $('shareSteps').hidden = live;
+  $('sharePresets').hidden = live || mobileDevice;
+  renderShareChoices();
 
   $('modal').hidden = false;
 }
+
+for (const button of document.querySelectorAll('#sharePresets button')) {
+  button.addEventListener('click', () => applySharePreset(button.dataset.preset));
+}
+
+$('roomHintShare').addEventListener('click', () => {
+  store('roomHintDismissed', '1');
+  $('roomHint').hidden = true;
+  openModal('start');
+});
+$('roomHintClose').addEventListener('click', () => {
+  store('roomHintDismissed', '1');
+  $('roomHint').hidden = true;
+});
 
 $('liveSettings').addEventListener('click', () => openModal('live'));
 $('audioStatusPill').addEventListener('click', () => {
@@ -2178,6 +2231,7 @@ $('audioStatusPill').addEventListener('click', () => {
 });
 $('mAudio').addEventListener('change', () => {
   $('mAudioGuide').hidden = !$('mAudio').checked;
+  renderShareChoices();
 });
 
 /** Espelha o volume atual no botão e no cursor, sem tocar no áudio. */
@@ -2247,14 +2301,17 @@ function storeBroadcastPreferences() {
 }
 
 $('mEconomy').addEventListener('change', () => {
-  if (!$('mEconomy').checked) return;
-  $('mQuality').value = '1000000';
-  $('mFps').value = '15';
+  if ($('mEconomy').checked) {
+    $('mQuality').value = '1000000';
+    $('mFps').value = '15';
+  }
+  renderShareChoices();
 });
 
 for (const id of ['mQuality', 'mFps']) {
   $(id).addEventListener('change', () => {
     if ($(id).value !== (id === 'mQuality' ? '1000000' : '15')) $('mEconomy').checked = false;
+    renderShareChoices();
   });
 }
 
@@ -2580,6 +2637,7 @@ async function setFullscreen(active) {
 
 $('mCamera').addEventListener('change', () => {
   $('mCameraOptions').hidden = !$('mCamera').checked;
+  renderShareChoices();
 });
 
 const toggleFullscreen = () => setFullscreen(!telaCheia);

@@ -797,6 +797,13 @@ button {
   white-space: nowrap;
 }
 
+.room-hint { position: relative; display: flex; align-items: center; gap: 14px; max-width: min(560px, calc(100vw - 24px)); padding: 10px 42px 10px 14px; border: 1px solid rgba(88,101,242,.42); border-radius: 12px; background: rgba(25,27,38,.96); box-shadow: 0 12px 30px rgba(0,0,0,.28); }
+.room-hint > div { display: grid; min-width: 0; }
+.room-hint strong { font-size: 12.5px; }
+.room-hint span { color: var(--muted); font-size: 11px; }
+.room-hint .btn { flex: 0 0 auto; min-height: 34px; }
+.hint-close { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: var(--muted); font-size: 20px; }
+
 .access-badge {
   flex: 0 0 auto;
   padding: 2px 6px;
@@ -859,6 +866,22 @@ button {
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.45;
+}
+
+.share-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: -7px 0 15px; }
+.share-steps span { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 9.5px; }
+.share-steps b { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: rgba(88,101,242,.18); color: #c3c8ff; font-size: 9px; }
+.share-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 16px; }
+.share-presets button { display: grid; gap: 2px; padding: 9px 6px; border: 1px solid var(--line); border-radius: 9px; background: #111214; color: var(--text); text-align: center; }
+.share-presets button:hover, .share-presets button.selected { border-color: var(--accent); background: rgba(88,101,242,.13); }
+.share-presets strong { font-size: 11px; }
+.share-presets small { color: var(--muted); font-size: 8.5px; }
+.share-summary { margin: 11px 0 4px; padding: 9px 11px; border: 1px solid rgba(50,196,119,.25); border-radius: 9px; background: rgba(50,196,119,.065); color: #bcebd2; font-size: 11px; text-align: center; }
+@media (max-width: 520px) {
+  .room-hint { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .share-steps { display: none; }
+  .share-presets { grid-template-columns: 1fr; }
+  .share-presets button { grid-template-columns: 1fr auto; align-items: center; text-align: left; }
 }
 
 .empty > .btn { margin-top: 14px; }
