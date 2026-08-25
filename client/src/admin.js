@@ -354,8 +354,9 @@ async function loadOverview(silent = false) {
     $('#maintenanceBanner').hidden = !data.maintenance;
     $('#enableMaintenance').hidden = Boolean(data.maintenance);
     const app = data.application;
+    const webhookConfigured = Boolean(app?.webhookTypes?.length) || app?.webhookStatus === 2;
     $('#appCounts').textContent = app
-      ? `${app.approximateGuildCount ?? '—'} instalação(ões) aproximada(s) · webhook ${app.webhookStatus === 2 ? 'ativo' : 'pendente'}`
+      ? `${app.approximateGuildCount ?? '—'} instalação(ões) aproximada(s) · webhook ${webhookConfigured ? 'configurado' : 'ainda sem confirmação'}`
       : 'Informações do Discord temporariamente indisponíveis';
   } catch (problem) {
     if (problem.status === 401) return showLogin();

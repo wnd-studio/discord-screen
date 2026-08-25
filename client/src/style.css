@@ -835,6 +835,28 @@ button {
   border-color: rgba(240, 178, 50, 0.55);
 }
 
+.empty > .btn { margin-top: 14px; }
+.diagnostic-card { max-width: 520px; }
+.diagnostic-list {
+  display: grid;
+  gap: 9px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+.diagnostic-list li {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .035);
+}
+.diagnostic-list li span { color: var(--muted); font-size: 13px; }
+.diagnostic-ok strong { color: #57f287; }
+.diagnostic-warning strong { color: #fee75c; }
+.diagnostic-trigger { cursor: pointer; }
+
 /* Encostado embaixo, como a barra de controles de uma call. O respiro menor
    embaixo do que em cima é de propósito: a barra pertence à borda da tela. */
 .pill {

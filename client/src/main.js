@@ -1,7 +1,7 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { createPlayer } from './player.js';
 import { createAudio } from './audio.js';
-import { createBroadcaster } from '../../shared/broadcaster.js';
+import { compatibilityInfo, createBroadcaster } from '../../shared/broadcaster.js';
 import QRCode from 'qrcode';
 
 const $ = (id) => document.getElementById(id);
@@ -34,6 +34,8 @@ let clientId = null;
 let ws = null;
 let participants = [];
 let reconnectDelay = 1000;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
 let lagTimer = null;
 const WISE_URL = 'https://wise.com/pay/me/wendelld173';
 const PAYPAL_URL = 'https://www.paypal.com/qrcodes/p2pqrc/TJ8SUKSF65WF6';
@@ -89,7 +91,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.6';
+const NEWS_VERSION = '0.8.7';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -112,6 +114,48 @@ function toast(msg, isError = false) {
 function setEmpty(title, text) {
   $('emptyTitle').textContent = title;
   $('emptyText').textContent = text;
+}
+
+function browserName() {
+  const ua = navigator.userAgent;
+  if (/Firefox/i.test(ua)) return 'Firefox';
+  if (/Edg\//i.test(ua)) return 'Microsoft Edge';
+  if (/OPR|Opera/i.test(ua)) return 'Opera';
+  if (/Chrome|Chromium|CriOS/i.test(ua)) return 'Chrome/Chromium';
+  if (/Safari/i.test(ua)) return 'Safari';
+  return 'Navegador não identificado';
+}
+
+function diagnosticItem(label, ok, detail) {
+  const item = document.createElement('li');
+  item.className = ok ? 'diagnostic-ok' : 'diagnostic-warning';
+  const mark = document.createElement('strong');
+  mark.textContent = `${ok ? '✓' : '!'} ${label}`;
+  const text = document.createElement('span');
+  text.textContent = detail;
+  item.append(mark, text);
+  return item;
+}
+
+function openDiagnostics() {
+  const support = compatibilityInfo();
+  const capture = Boolean(navigator.mediaDevices?.getDisplayMedia);
+  const camera = Boolean(navigator.mediaDevices?.getUserMedia);
+  const webCodecs = Boolean(support.video && window.VideoDecoder);
+  const online = navigator.onLine;
+  $('diagnosticBrowser').textContent = `${browserName()} · modo ${support.mode}`;
+  $('diagnosticList').replaceChildren(
+    diagnosticItem('Internet', online, online ? 'Conexão disponível.' : 'Seu dispositivo está sem acesso à internet.'),
+    diagnosticItem('Transmissão de tela', capture, capture ? 'Disponível neste navegador.' : 'Abra em um navegador desktop compatível.'),
+    diagnosticItem('Câmera e microfone', camera, camera ? 'Disponíveis após sua autorização.' : 'Não oferecidos neste contexto.'),
+    diagnosticItem('Vídeo em tempo real', webCodecs, webCodecs ? `Modo ${support.mode} disponível.` : 'Atualize o navegador ou tente Chrome, Edge, Firefox ou Safari no computador.'),
+    diagnosticItem('Áudio compartilhado', true, 'A disponibilidade depende da tela, janela ou aba escolhida. Aba costuma ser a opção mais confiável.'),
+  );
+  $('diagnosticModal').hidden = false;
+}
+
+function closeDiagnostics() {
+  $('diagnosticModal').hidden = true;
 }
 
 /**
@@ -1758,6 +1802,10 @@ async function post(url, body, { retry = true } = {}) {
 
 function connect() {
   if (!roomTokens) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  $('retryConnection').hidden = true;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(
     `${proto}://${location.host}${P}/ws?t=${encodeURIComponent(roomTokens.viewerToken)}`
@@ -1769,10 +1817,12 @@ function connect() {
   ws.addEventListener('open', () => {
     abriu = true;
     reconnectDelay = 1000;
+    reconnectAttempts = 0;
     $('grid').hidden = false;
     $('connectionPill').hidden = false;
     $('connectionPill').classList.remove('reconnecting');
     $('connectionPill').textContent = 'Conectado';
+    $('retryConnection').hidden = true;
     setEmpty('Ninguém na sala', 'Aguardando participantes.');
 
     // O apelido é do cliente, então precisa ser reenviado a cada conexão —
@@ -1900,17 +1950,70 @@ function connect() {
       return;
     }
 
-    setEmpty('Reconectando…', 'A conexão com a sala caiu.');
-    $('connectionPill').hidden = false;
-    $('connectionPill').classList.add('reconnecting');
-    $('connectionPill').textContent = 'Reconectando…';
-    // Backoff — evita martelar o servidor se ele estiver fora do ar.
-    setTimeout(connect, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+    scheduleRoomReconnect();
   });
 
-  ws.addEventListener('error', () => ws.close());
+  ws.addEventListener('error', (event) => event.currentTarget.close());
 }
+
+function scheduleRoomReconnect() {
+  if (!roomTokens || reconnectTimer) return;
+  if (!navigator.onLine) {
+    setEmpty('Sem internet', 'Quando a conexão voltar, tentaremos entrar novamente.');
+    $('connectionPill').hidden = false;
+    $('connectionPill').classList.add('reconnecting');
+    $('connectionPill').textContent = 'Sem internet';
+    $('retryConnection').hidden = false;
+    return;
+  }
+
+  reconnectAttempts += 1;
+  if (reconnectAttempts > 8) {
+    setEmpty('Não foi possível reconectar', 'Clique abaixo para tentar novamente agora.');
+    $('connectionPill').textContent = 'Desconectado';
+    $('retryConnection').hidden = false;
+    return;
+  }
+
+  const seconds = Math.max(1, Math.ceil(reconnectDelay / 1000));
+  setEmpty('Reconectando…', `Tentativa ${reconnectAttempts} de 8 · próxima em ${seconds}s.`);
+  $('connectionPill').hidden = false;
+  $('connectionPill').classList.add('reconnecting');
+  $('connectionPill').textContent = `Reconectando (${reconnectAttempts}/8)`;
+  $('retryConnection').hidden = reconnectAttempts < 2;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, 15_000);
+}
+
+function reconnectNow() {
+  if (!roomTokens) return;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  reconnectDelay = 1000;
+  reconnectAttempts = 0;
+  if (!navigator.onLine) {
+    scheduleRoomReconnect();
+    return;
+  }
+  connect();
+}
+
+$('retryConnection').addEventListener('click', reconnectNow);
+$('lobbyDiagnostics').addEventListener('click', openDiagnostics);
+$('topDiagnostics').addEventListener('click', openDiagnostics);
+$('diagnosticClose').addEventListener('click', closeDiagnostics);
+$('diagnosticModal').addEventListener('click', (event) => {
+  if (event.target === $('diagnosticModal')) closeDiagnostics();
+});
+window.addEventListener('offline', () => {
+  if (roomTokens && ws?.readyState !== WebSocket.OPEN) scheduleRoomReconnect();
+});
+window.addEventListener('online', () => {
+  if (roomTokens && ws?.readyState !== WebSocket.OPEN) reconnectNow();
+});
 
 // --------------------------------------------------------------------- ações
 

@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.8.3-22C55E?style=flat-square" alt="Versão 0.8.3">
+    <img src="https://img.shields.io/badge/versao-0.8.7-22C55E?style=flat-square" alt="Versão 0.8.7">
   </p>
 
   <p>
@@ -148,7 +148,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Pausar novidades por servidor | ✅ Desativar e reativar sem reinstalar |
 | Vídeo em tempo real | ✅ WebCodecs + WebSocket |
 | Modo compatível para Firefox e Safari desktop | ✅ Codec e captura selecionados automaticamente |
-| Transmissão móvel de câmera e microfone | ✅ Pelo navegador, com câmera frontal/traseira e sem instalação |
+| Transmissão móvel de câmera e microfone | 🧪 Disponível em testes pelo navegador, com limitações ao trocar de aplicativo |
 | Modo economia | ✅ Até 720p, 15 fps e 1 Mbps com um clique |
 | Fixar transmissão no palco | ✅ Preferência salva no navegador |
 | Áudio em segundo plano | ✅ Interrompe o relay de vídeo ao trocar de janela |
@@ -157,7 +157,7 @@ Para transmitir áudio, compartilhe uma **aba do navegador** e habilite a opçã
 | Múltiplos transmissores | ✅ Até 4 por sala |
 | Espectadores | ✅ Limite de segurança de 50 por sala |
 | Gravação da transmissão | ❌ Não realizada |
-| Transmissão iniciada pelo celular | ❌ Ainda não suportada |
+| Compartilhamento da tela inteira do celular | ❌ Limitado pelos navegadores móveis; câmera e microfone estão em testes |
 
 O transmissor também interrompe a codificação quando ninguém está assistindo, reduzindo consumo de processamento e da cota da Cloudflare.
 

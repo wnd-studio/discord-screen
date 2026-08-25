@@ -12,6 +12,7 @@
       <div class="topbar">
         <div id="people" class="pill" title="Pessoas na sala"></div>
         <div id="roomPill" class="pill room-pill" hidden></div>
+        <button id="topDiagnostics" class="pill diagnostic-trigger" title="Diagnóstico do navegador">Diagnóstico</button>
         <div id="connectionPill" class="pill connection-pill" hidden>Conectando…</div>
       </div>
 
@@ -21,6 +22,7 @@
         <img class="empty-logo" src="/brand/wnd-neutral.png" alt="WND Studio" />
         <h1 id="emptyTitle">Conectando…</h1>
         <p id="emptyText" class="muted">Entrando na sala</p>
+        <button id="retryConnection" class="btn go" hidden>Reconectar agora</button>
       </div>
 
       <!-- Lobby: escolher ou criar sala antes de entrar -->
@@ -34,6 +36,7 @@
             </div>
           </div>
           <div class="lobby-actions">
+            <button id="lobbyDiagnostics" class="btn" title="Verificar compatibilidade">Diagnóstico</button>
             <button id="lobbySupport" class="btn support-btn" title="Apoiar o projeto">♡ Apoiar</button>
             <a id="installApp" class="btn" href="/changelog/install" title="Adicionar ao servidor">Adicionar ao servidor</a>
             <button id="lobbyNews" class="btn" title="Ver novidades">Novidades</button>
@@ -382,6 +385,16 @@
         </div>
       </div>
 
+      <div id="diagnosticModal" class="modal" hidden>
+        <div class="modal-card diagnostic-card" role="dialog" aria-modal="true" aria-labelledby="diagnosticTitle">
+          <h2 id="diagnosticTitle">Diagnóstico do navegador</h2>
+          <p id="diagnosticBrowser" class="modal-sub"></p>
+          <ul id="diagnosticList" class="diagnostic-list"></ul>
+          <p class="news-footnote">Nenhuma imagem, áudio ou conteúdo da sua tela é coletado neste diagnóstico.</p>
+          <div class="modal-actions"><button id="diagnosticClose" class="btn go">Fechar</button></div>
+        </div>
+      </div>
+
       <div id="supportModal" class="modal" hidden>
         <div class="modal-card support-card" role="dialog" aria-modal="true" aria-labelledby="supportTitle">
           <div class="support-kicker">APOIE O PROJETO</div>
@@ -427,26 +440,26 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">BUILD 0.8.6</div>
-          <h2 id="newsTitle">Transmissão mais rápida</h2>
-          <p class="modal-sub">Menos etapas para começar a compartilhar.</p>
+          <div class="news-kicker">BUILD 0.8.7</div>
+          <h2 id="newsTitle">Mais estabilidade</h2>
+          <p class="modal-sub">Diagnóstico claro e reconexão que não fica presa para sempre.</p>
 
           <ul class="news-list">
             <li>
-              <span class="news-icon">⚡</span>
-              <div><strong>Comece imediatamente</strong><p>Escolheu a tela, janela, aba ou câmera? A transmissão começa automaticamente.</p></div>
+              <span class="news-icon">🩺</span>
+              <div><strong>Diagnóstico integrado</strong><p>Confira navegador, internet, captura de tela, câmera e modo de vídeo em poucos segundos.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">🔄</span>
+              <div><strong>Reconexão controlada</strong><p>Agora as tentativas são numeradas, têm limite e oferecem um botão para tentar imediatamente.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">📡</span>
+              <div><strong>Internet reconhecida</strong><p>O aplicativo diferencia uma queda do servidor de um dispositivo realmente sem conexão.</p></div>
             </li>
             <li>
               <span class="news-icon">🧭</span>
-              <div><strong>Fluxo mais simples</strong><p>Removemos a etapa de pré-visualização e o segundo botão de confirmação.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">🔊</span>
-              <div><strong>Áudio ainda visível</strong><p>O medidor e os avisos de áudio continuam disponíveis enquanto você transmite.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">🎛️</span>
-              <div><strong>Controles preservados</strong><p>Câmera, qualidade, estatísticas e troca da fonte de áudio continuam acessíveis.</p></div>
+              <div><strong>Erros mais claros</strong><p>As telas de recuperação agora informam o que está acontecendo e como continuar.</p></div>
             </li>
           </ul>
 
