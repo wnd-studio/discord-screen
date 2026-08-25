@@ -48,7 +48,8 @@ export class RoomRegistry extends DurableObject {
         launches INTEGER NOT NULL DEFAULT 0,
         installed INTEGER NOT NULL DEFAULT 0,
         installed_at INTEGER,
-        authorized_by TEXT
+        authorized_by TEXT,
+        authorized_by_name TEXT
       );
       CREATE INDEX IF NOT EXISTS servers_last_seen ON servers(last_seen DESC);
 
@@ -145,6 +146,7 @@ export class RoomRegistry extends DurableObject {
       'ALTER TABLE rooms ADD COLUMN owner_id TEXT',
       'ALTER TABLE rooms ADD COLUMN guild_id TEXT',
       'ALTER TABLE rooms ADD COLUMN channel_id TEXT',
+      'ALTER TABLE servers ADD COLUMN authorized_by_name TEXT',
     ]) {
       try { this.ctx.storage.sql.exec(statement); } catch {}
     }
@@ -310,12 +312,14 @@ export class RoomRegistry extends DurableObject {
       if (payload.eventType === 'APPLICATION_AUTHORIZED' && guild?.id) {
         this.ctx.storage.sql.exec(
           `INSERT INTO servers
-            (guild_id, name, icon, first_seen, last_seen, launches, installed, installed_at, authorized_by)
-           VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?)
+            (guild_id, name, icon, first_seen, last_seen, launches, installed, installed_at, authorized_by, authorized_by_name)
+           VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
            ON CONFLICT(guild_id) DO UPDATE SET name=COALESCE(excluded.name, servers.name),
              icon=COALESCE(excluded.icon, servers.icon), installed=1,
-             installed_at=excluded.installed_at, authorized_by=excluded.authorized_by`,
-          guild.id, cleanText(guild.name, 100), cleanText(guild.icon, 80), at, at, at, data.user?.id ?? null
+             installed_at=excluded.installed_at, authorized_by=excluded.authorized_by,
+             authorized_by_name=excluded.authorized_by_name`,
+          guild.id, cleanText(guild.name, 100), cleanText(guild.icon, 80), at, at, at,
+          data.user?.id ?? null, cleanText(data.user?.global_name || data.user?.username, 64)
         );
       } else if (payload.eventType === 'APPLICATION_DEAUTHORIZED' && guild?.id) {
         this.ctx.storage.sql.exec(
@@ -576,13 +580,14 @@ export class RoomRegistry extends DurableObject {
 
     const servers = this.ctx.storage.sql.exec(
       `SELECT guild_id, name, icon, first_seen, last_seen, last_channel_id,
-              last_channel_name, launches, installed, installed_at, authorized_by
+              last_channel_name, launches, installed, installed_at, authorized_by, authorized_by_name
        FROM servers ORDER BY last_seen DESC LIMIT 100`
     ).toArray().map((row) => ({
       guildId: row.guild_id, name: row.name, icon: row.icon, firstSeen: row.first_seen,
       lastSeen: row.last_seen, lastChannelId: row.last_channel_id,
       lastChannelName: row.last_channel_name, launches: row.launches,
-      installed: Boolean(row.installed), installedAt: row.installed_at, authorizedBy: row.authorized_by,
+      installed: Boolean(row.installed), installedAt: row.installed_at,
+      authorizedBy: row.authorized_by, authorizedByName: row.authorized_by_name,
     }));
     const blocks = this.ctx.storage.sql.exec(
       `SELECT subject_type, subject_id, reason, expires_at, created_by, created_at

@@ -116,7 +116,7 @@ button, a { font: inherit; }
 .room-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
 
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 780px; }
+table { width: 100%; border-collapse: collapse; min-width: 940px; }
 th, td { padding: 11px 10px; border-top: 1px solid var(--line); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
 td { font-size: 12.5px; }

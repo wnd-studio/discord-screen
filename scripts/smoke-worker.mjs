@@ -352,6 +352,7 @@ if (testAdmin) {
   assert.ok(finalOverview.data.analytics.summary.launches7d >= 1);
   assert.equal('userId' in finalOverview.data.analytics.summary, false);
   assert.equal(finalOverview.data.servers.some((server) => server.guildId === '987654321098765432'), true);
+  assert.equal('authorizedByName' in finalOverview.data.servers[0], true);
   adminViewer.close();
 }
 

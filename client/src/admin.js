@@ -249,7 +249,9 @@ function renderAnalytics(analytics = {}) {
 
 function renderServers(servers, query = '') {
   const term = query.trim().toLowerCase();
-  const filtered = term ? servers.filter((server) => [server.guildId, server.name, server.lastChannelName]
+  const filtered = term ? servers.filter((server) => [
+    server.guildId, server.name, server.lastChannelName, server.authorizedByName, server.authorizedBy,
+  ]
     .some((value) => String(value || '').toLowerCase().includes(term))) : servers;
   const rows = filtered.map((server) => {
     const row = document.createElement('tr');
@@ -277,6 +279,11 @@ function renderServers(servers, query = '') {
     cell.append(names);
     identity.append(cell);
     row.append(identity);
+    const installer = document.createElement('td');
+    const installerName = server.authorizedByName || (server.authorizedBy ? 'Usuário do Discord' : 'Não informado');
+    installer.append(el('span', 'server-name', installerName));
+    if (server.authorizedBy) installer.querySelector('.server-name').append(el('small', '', server.authorizedBy));
+    row.append(installer);
     row.append(el('td', '', server.lastChannelName || server.lastChannelId || '—'));
     row.append(el('td', '', number(server.launches)));
     row.append(el('td', '', date(server.lastSeen)));
@@ -296,7 +303,7 @@ function renderServers(servers, query = '') {
   if (!rows.length) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 6;
+    cell.colSpan = 7;
     cell.append(empty('O histórico começa a ser preenchido quando a Atividade for aberta novamente.'));
     row.append(cell);
     rows.push(row);
