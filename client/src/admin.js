@@ -4,6 +4,7 @@ const dashboard = $('#dashboard');
 const toast = $('#toast');
 let admin = null;
 let refreshTimer = null;
+let currentOverview = null;
 
 function showToast(message, isError = false) {
   toast.textContent = message;
@@ -172,12 +173,20 @@ function roomCard(room) {
   return card;
 }
 
-function renderRooms(rooms) {
-  $('#rooms').replaceChildren(...(rooms.length ? rooms.map(roomCard) : [empty('Nenhuma sala ativa neste momento.') ]));
+function renderRooms(rooms, query = '') {
+  const term = query.trim().toLowerCase();
+  const filtered = term ? rooms.filter((room) => [
+    room.id, room.name, room.guildId, room.channelId,
+    ...(room.participants || []).flatMap((person) => [person.id, person.name]),
+  ].some((value) => String(value || '').toLowerCase().includes(term))) : rooms;
+  $('#rooms').replaceChildren(...(filtered.length ? filtered.map(roomCard) : [empty('Nenhuma sala corresponde ao filtro.') ]));
 }
 
-function renderServers(servers) {
-  const rows = servers.map((server) => {
+function renderServers(servers, query = '') {
+  const term = query.trim().toLowerCase();
+  const filtered = term ? servers.filter((server) => [server.guildId, server.name, server.lastChannelName]
+    .some((value) => String(value || '').toLowerCase().includes(term))) : servers;
+  const rows = filtered.map((server) => {
     const row = document.createElement('tr');
     const identity = document.createElement('td');
     const cell = el('div', 'server-cell');
@@ -325,8 +334,12 @@ function renderChangelog(changelog = {}, botConfigured, installUrl, bot = {}) {
   }) : [empty('Nenhum changelog publicado pelo painel.')]));
 }
 
-function renderAudit(audit) {
-  const rows = audit.map((entry) => {
+function renderAudit(audit, query = '') {
+  const term = query.trim().toLowerCase();
+  const filtered = term ? audit.filter((entry) => [
+    entry.adminName, entry.action, actionLabels[entry.action], entry.targetId,
+  ].some((value) => String(value || '').toLowerCase().includes(term))) : audit;
+  const rows = filtered.map((entry) => {
     const row = el('div', 'stack-row');
     const main = el('div', 'stack-main');
     main.append(el('strong', '', `${entry.adminName} · ${actionLabels[entry.action] || entry.action}`));
@@ -337,11 +350,40 @@ function renderAudit(audit) {
   $('#audit').replaceChildren(...(rows.length ? rows : [empty('As próximas ações administrativas aparecerão aqui.') ]));
 }
 
+function renderOperations(operations = {}, bot = {}) {
+  const cards = [
+    ['Sessão administrativa', `${operations.sessionHours || '—'} horas`, 'Renovada somente após novo login'],
+    ['Proteção contra abuso', operations.rateLimits ? 'Ativa' : 'Indisponível', 'Limites por origem sem armazenar o IP'],
+    ['Privacidade', `${operations.nameRetentionDays || '—'} dias`, 'Nomes antigos são removidos dos eventos'],
+    ['Bot e webhook', bot.valid && operations.webhookConfigured ? 'Saudáveis' : 'Requer atenção', bot.valid ? 'Bot conectado' : 'Bot indisponível'],
+  ];
+  $('#operations').replaceChildren(...cards.map(([label, value, detail], index) => {
+    const warning = index === 3 && !(bot.valid && operations.webhookConfigured);
+    const card = el('article', `operation-card ${warning ? 'warning' : ''}`.trim());
+    card.append(el('span', '', label), el('strong', '', value), el('span', '', detail));
+    return card;
+  }));
+  const alerts = operations.alerts || [];
+  $('#operationalAlerts').replaceChildren(...(alerts.length ? alerts.map((alert) => {
+    const row = el('div', 'stack-row');
+    row.append(el('div', 'stack-main', alert.message));
+    return row;
+  }) : [empty('Nenhum alerta operacional neste momento.') ]));
+}
+
+function applyFilters() {
+  if (!currentOverview) return;
+  renderRooms(currentOverview.rooms || [], $('#roomFilter').value);
+  renderServers(currentOverview.servers || [], $('#serverFilter').value);
+  renderAudit(currentOverview.audit || [], $('#auditFilter').value);
+}
+
 async function loadOverview(silent = false) {
   const refresh = $('#refresh');
   if (!silent) refresh.disabled = true;
   try {
     const data = await post('/api/admin/overview');
+    currentOverview = data;
     renderStats(data.totals || {});
     renderChart(data.daily || []);
     renderRooms(data.rooms || []);
@@ -350,6 +392,7 @@ async function loadOverview(silent = false) {
     renderSupporters(data.supporters || []);
     renderAudit(data.audit || []);
     renderChangelog(data.changelog, data.botConfigured, data.installUrl, data.bot);
+    renderOperations(data.operations, data.bot);
     $('#updatedAt').textContent = `Atualizado ${date(data.generatedAt)}`;
     $('#maintenanceBanner').hidden = !data.maintenance;
     $('#enableMaintenance').hidden = Boolean(data.maintenance);
@@ -364,6 +407,10 @@ async function loadOverview(silent = false) {
   } finally {
     refresh.disabled = false;
   }
+}
+
+for (const id of ['roomFilter', 'serverFilter', 'auditFilter']) {
+  $(`#${id}`).addEventListener('input', applyFilters);
 }
 
 function showLogin() {

@@ -4,6 +4,9 @@ import { json } from './http.js';
 const MAX_ROOMS_PER_INSTANCE = 20;
 const STALE_ROOM_GRACE_MS = 30_000;
 const HISTORY_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const AUDIT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
+const PUBLICATION_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
+const USER_NAME_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const cleanText = (value, max = 120) => {
@@ -92,6 +95,12 @@ export class RoomRegistry extends DurableObject {
         updated_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS rate_limits (
+        bucket TEXT PRIMARY KEY,
+        hits INTEGER NOT NULL,
+        window_start INTEGER NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS changelog_channels (
         guild_id TEXT PRIMARY KEY,
         guild_name TEXT,
@@ -161,7 +170,14 @@ export class RoomRegistry extends DurableObject {
     const now = Date.now();
     if (row && now - Number(row.value) < DAY_MS) return;
     this.ctx.storage.sql.exec('DELETE FROM usage_events WHERE created_at < ?', now - HISTORY_RETENTION_MS);
+    this.ctx.storage.sql.exec(
+      'UPDATE usage_events SET user_name = NULL WHERE created_at < ? AND user_name IS NOT NULL',
+      now - USER_NAME_RETENTION_MS
+    );
+    this.ctx.storage.sql.exec('DELETE FROM admin_audit WHERE created_at < ?', now - AUDIT_RETENTION_MS);
+    this.ctx.storage.sql.exec('DELETE FROM changelog_publications WHERE created_at < ?', now - PUBLICATION_RETENTION_MS);
     this.ctx.storage.sql.exec('DELETE FROM blocks WHERE expires_at IS NOT NULL AND expires_at <= ?', now);
+    this.ctx.storage.sql.exec('DELETE FROM rate_limits WHERE window_start < ?', now - 2 * DAY_MS);
     this.ctx.storage.sql.exec(
       `INSERT INTO settings (key, value, updated_at) VALUES ('last_cleanup', ?, ?)
        ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
@@ -174,6 +190,32 @@ export class RoomRegistry extends DurableObject {
     const payload = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
 
     if (url.pathname === '/list') return this.listRooms(payload.instance);
+
+    if (url.pathname === '/rate/check') {
+      const now = Date.now();
+      const bucket = cleanText(payload.bucket, 160);
+      const limit = Math.min(1000, Math.max(1, Number(payload.limit) || 30));
+      const windowMs = Math.min(DAY_MS, Math.max(1000, Number(payload.windowMs) || 60_000));
+      if (!bucket) return json({ allowed: false, retryAfter: 60 }, 400);
+      const current = this.ctx.storage.sql.exec(
+        'SELECT hits, window_start FROM rate_limits WHERE bucket = ?', bucket
+      ).toArray()[0];
+      if (!current || now - Number(current.window_start) >= windowMs) {
+        this.ctx.storage.sql.exec(
+          `INSERT INTO rate_limits (bucket, hits, window_start) VALUES (?, 1, ?)
+           ON CONFLICT(bucket) DO UPDATE SET hits=1, window_start=excluded.window_start`,
+          bucket, now
+        );
+        return json({ allowed: true, remaining: limit - 1 });
+      }
+      const hits = Number(current.hits) + 1;
+      this.ctx.storage.sql.exec('UPDATE rate_limits SET hits = ? WHERE bucket = ?', hits, bucket);
+      return json({
+        allowed: hits <= limit,
+        remaining: Math.max(0, limit - hits),
+        retryAfter: Math.max(1, Math.ceil((windowMs - (now - Number(current.window_start))) / 1000)),
+      });
+    }
 
     if (url.pathname === '/put') {
       const count = this.ctx.storage.sql.exec(

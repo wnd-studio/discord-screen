@@ -7,7 +7,7 @@ export { RoomRegistry } from './registry.js';
 const WEB_INSTANCE = 'web';
 const ROOM_NAME_MAX = 40;
 const ROOM_TOKEN_TTL = 8 * 60 * 60;
-const ADMIN_TOKEN_TTL = 12 * 60 * 60;
+const ADMIN_TOKEN_TTL = 4 * 60 * 60;
 const ADMIN_COOKIE = 'discord_screen_admin';
 const OAUTH_STATE_COOKIE = 'discord_screen_oauth_state';
 const INSTALL_STATE_COOKIE = 'discord_screen_install_state';
@@ -54,7 +54,34 @@ function cookies(request) {
 
 async function adminOf(request, env) {
   const token = await verifyToken(cookies(request)[ADMIN_COOKIE], env.SESSION_SECRET);
-  return token?.scope === 'admin' ? token : null;
+  if (token?.scope !== 'admin') return null;
+  if (!token.iat || Math.floor(Date.now() / 1000) - Number(token.iat) > ADMIN_TOKEN_TTL) return null;
+  return await isApplicationAdmin(env, token.uid) ? token : null;
+}
+
+async function requestFingerprint(request, env) {
+  const value = `${request.headers.get('cf-connecting-ip') || 'unknown'}:${request.headers.get('user-agent') || ''}`;
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(env.SESSION_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value)));
+  return [...bytes.slice(0, 12)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function enforceRateLimit(request, env, group, limit, windowMs = 60_000) {
+  const fingerprint = await requestFingerprint(request, env);
+  const checked = await internal(registry(env), '/rate/check', {
+    bucket: `${group}:${fingerprint}`, limit, windowMs,
+  });
+  if (checked.data.allowed !== false) return null;
+  return error('Muitas tentativas. Aguarde um pouco e tente novamente.', 429, {
+    reason: 'limite', retryAfter: checked.data.retryAfter,
+  });
+}
+
+function validMutationOrigin(request, env) {
+  return request.headers.get('origin') === originFor(request, env);
 }
 
 async function blockFor(env, userId, guildId = null) {
@@ -266,6 +293,14 @@ async function adminApi(request, env, url, data) {
       applicationMetadata(env),
       botDiagnostics(env),
     ]);
+    const webhookConfigured = Boolean(application?.event_webhooks_types?.length)
+      || application?.event_webhooks_status === 2;
+    const alerts = [];
+    if (!bot.valid) alerts.push({ level: 'error', message: 'O bot do Discord não está respondendo corretamente.' });
+    if (!webhookConfigured) alerts.push({ level: 'warning', message: 'O Discord ainda não confirmou o webhook de eventos.' });
+    if (Number(overview.data.totals?.activePeople || 0) >= 40) {
+      alerts.push({ level: 'warning', message: 'Uso simultâneo elevado: acompanhe salas e transmissões ativas.' });
+    }
     return json({
       ...overview.data,
       application: application ? {
@@ -278,13 +313,21 @@ async function adminApi(request, env, url, data) {
       } : null,
       botConfigured: Boolean(env.DISCORD_BOT_TOKEN),
       bot,
+      operations: {
+        sessionHours: ADMIN_TOKEN_TTL / 3600,
+        usageRetentionDays: 90,
+        nameRetentionDays: 30,
+        auditRetentionDays: 180,
+        rateLimits: true,
+        webhookConfigured,
+        alerts,
+      },
       installUrl: `${originFor(request, env)}/changelog/install`,
     }, overview.response.status);
   }
 
   if (url.pathname === '/api/admin/changelog/publish' && request.method === 'POST') {
-    const requestOrigin = request.headers.get('origin');
-    if (requestOrigin && requestOrigin !== originFor(request, env)) return error('Origem inválida.', 403);
+    if (!validMutationOrigin(request, env)) return error('Origem inválida.', 403);
     if (!env.DISCORD_BOT_TOKEN) return error('Configure DISCORD_BOT_TOKEN antes de publicar.', 503);
 
     const publication = {
@@ -327,8 +370,7 @@ async function adminApi(request, env, url, data) {
   if (url.pathname !== '/api/admin/action' || request.method !== 'POST') {
     return error('Rota administrativa não encontrada.', 404);
   }
-  const requestOrigin = request.headers.get('origin');
-  if (requestOrigin && requestOrigin !== originFor(request, env)) return error('Origem inválida.', 403);
+  if (!validMutationOrigin(request, env)) return error('Origem inválida.', 403);
 
   const reason = String(data.reason || 'Ação administrativa').replace(/\s+/g, ' ').trim().slice(0, 240);
   if (data.action === 'close-room') {
@@ -534,6 +576,16 @@ async function changelogApi(request, env, url, data) {
 
 async function api(request, env, url) {
   const data = request.method === 'POST' ? await body(request) : {};
+
+  let limited = null;
+  if (request.method === 'POST' && ['/api/token', '/api/session', '/api/session-guest'].includes(url.pathname)) {
+    limited = await enforceRateLimit(request, env, 'session', 40);
+  } else if (request.method === 'POST' && ['/api/rooms/create', '/api/rooms/join'].includes(url.pathname)) {
+    limited = await enforceRateLimit(request, env, 'rooms', 80);
+  } else if (request.method === 'POST' && url.pathname.startsWith('/api/admin/')) {
+    limited = await enforceRateLimit(request, env, 'admin', 120);
+  }
+  if (limited) return limited;
 
   if (url.pathname.startsWith('/api/admin/')) return adminApi(request, env, url, data);
   if (url.pathname.startsWith('/api/changelog/')) return changelogApi(request, env, url, data);

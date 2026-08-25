@@ -15,6 +15,7 @@ const post = async (path, payload) => {
 
 const adminPayload = Buffer.from(JSON.stringify({
   scope: 'admin', uid: 'smoke-admin', name: 'Administrador de teste',
+  iat: Math.floor(Date.now() / 1000),
   exp: Math.floor(Date.now() / 1000) + 3600,
 })).toString('base64url');
 const adminToken = `${adminPayload}.${createHmac('sha256', process.env.SMOKE_SESSION_SECRET || 'smoke-admin-secret').update(adminPayload).digest('base64url')}`;
@@ -35,6 +36,9 @@ const adminPost = async (path, payload = {}) => {
 
 const health = await fetch(`${base}/api/health`);
 assert.equal(health.status, 200);
+assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
+assert.match(health.headers.get('strict-transport-security') || '', /max-age=/);
+assert.equal(health.headers.get('cache-control'), 'no-store');
 assert.equal((await health.json()).architecture, 'cloudflare-workers-durable-objects');
 
 const guest = await post('/api/session-guest', { name: 'Teste' });
@@ -94,6 +98,16 @@ assert.equal(visibleList.data.rooms.some((room) => /^(call|atividade)-/.test(roo
 if (testAdmin) {
   const anonymousAdmin = await post('/api/admin/overview', {});
   assert.equal(anonymousAdmin.response.status, 401);
+  const stalePayload = Buffer.from(JSON.stringify({
+    scope: 'admin', uid: 'smoke-admin', name: 'Administrador antigo',
+    iat: Math.floor(Date.now() / 1000) - (5 * 60 * 60),
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  })).toString('base64url');
+  const staleToken = `${stalePayload}.${createHmac('sha256', process.env.SMOKE_SESSION_SECRET || 'smoke-admin-secret').update(stalePayload).digest('base64url')}`;
+  const staleAdmin = await fetch(`${base}/api/admin/overview`, {
+    method: 'POST', headers: { 'content-type': 'application/json', cookie: `discord_screen_admin=${staleToken}`, origin: base }, body: '{}',
+  });
+  assert.equal(staleAdmin.status, 401);
   const liveOverview = await adminPost('/api/admin/overview');
   assert.equal(liveOverview.response.status, 200);
   assert.equal(liveOverview.data.rooms.some((room) => room.id === created.data.roomId), true);

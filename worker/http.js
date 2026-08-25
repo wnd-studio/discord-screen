@@ -23,6 +23,12 @@ export function withSecurityHeaders(response) {
   );
   result.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   result.headers.set('X-Content-Type-Options', 'nosniff');
+  result.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  result.headers.set('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self)');
+  result.headers.set('X-Permitted-Cross-Domain-Policies', 'none');
+  if (!result.headers.has('cache-control') && result.headers.get('content-type')?.includes('application/json')) {
+    result.headers.set('Cache-Control', 'no-store');
+  }
   return result;
 }
 

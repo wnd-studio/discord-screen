@@ -55,6 +55,15 @@
 
       <section id="stats" class="stats" aria-label="Resumo"></section>
 
+      <section class="panel operations-panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Operação</p><h2>Saúde e segurança</h2></div>
+          <span class="panel-note">Atualização automática</span>
+        </div>
+        <div id="operations" class="operations-grid"></div>
+        <div id="operationalAlerts" class="stack operational-alerts"></div>
+      </section>
+
       <section class="panel supporter-panel">
         <div class="panel-head">
           <div>
@@ -133,6 +142,7 @@
           </div>
           <span class="live-dot">Tempo real</span>
         </div>
+        <input id="roomFilter" class="filter-input" type="search" placeholder="Filtrar salas, servidores ou usuários" />
         <div id="rooms" class="room-grid"></div>
       </section>
 
@@ -142,7 +152,7 @@
             <p class="eyebrow">Histórico</p>
             <h2>Servidores</h2>
           </div>
-          <span class="panel-note">Servidores onde o app foi aberto ou teve autorização registrada</span>
+          <input id="serverFilter" class="filter-input" type="search" placeholder="Filtrar servidores" />
         </div>
         <div class="table-wrap">
           <table>
@@ -163,6 +173,7 @@
         <section class="panel">
           <div class="panel-head">
             <div><p class="eyebrow">Rastreabilidade</p><h2>Ações administrativas</h2></div>
+            <input id="auditFilter" class="filter-input" type="search" placeholder="Filtrar ações" />
           </div>
           <div id="audit" class="stack audit"></div>
         </section>

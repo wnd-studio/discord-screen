@@ -162,3 +162,33 @@ footer { margin-top: 26px; color: #757985; font-size: 11px; }
   .changelog-layout { grid-template-columns:1fr; }
   .changelog-head-actions { width:100%; justify-content:flex-start; flex-wrap:wrap; }
 }
+/* Filtros e diagnóstico operacional da administração. */
+.filter-input {
+  width: min(320px, 100%);
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.operations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.operation-card {
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.operation-card strong { color: var(--green); }
+.operation-card.warning strong { color: #f0b232; }
+.operation-card.error strong { color: var(--red); }
+.operation-card span { color: var(--muted); font-size: 12px; }
+.operational-alerts { margin-top: 12px; }

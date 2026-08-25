@@ -23,7 +23,7 @@ async function key(secret) {
 }
 
 export async function signToken(payload, secret, ttlSeconds = null) {
-  const body = { ...payload };
+  const body = { iat: Math.floor(Date.now() / 1000), ...payload };
   if (ttlSeconds) body.exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const encoded = base64url(encoder.encode(JSON.stringify(body)));
   const signature = await crypto.subtle.sign('HMAC', await key(secret), encoder.encode(encoded));
