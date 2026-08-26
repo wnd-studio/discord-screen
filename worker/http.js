@@ -19,7 +19,7 @@ export function withSecurityHeaders(response) {
   const result = new Response(response.body, response);
   result.headers.set(
     'Content-Security-Policy',
-    "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com"
+    "frame-ancestors 'self' https://discord.com https://*.discord.com https://*.discordsays.com; base-uri 'none'; object-src 'none'"
   );
   result.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   result.headers.set('X-Content-Type-Options', 'nosniff');
@@ -29,6 +29,7 @@ export function withSecurityHeaders(response) {
   if (!result.headers.has('cache-control') && result.headers.get('content-type')?.includes('application/json')) {
     result.headers.set('Cache-Control', 'no-store');
   }
+  if (result.headers.has('set-cookie')) result.headers.set('Cache-Control', 'no-store');
   return result;
 }
 

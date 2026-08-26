@@ -3,11 +3,13 @@
 ## Controles atuais
 
 - Sessões administrativas assinadas, `HttpOnly`, `Secure` e com duração máxima de 4 horas.
-- A autorização administrativa é revalidada contra o proprietário, equipe ou lista configurada no Discord.
-- OAuth usa `state` assinado, cookie temporário e URI de retorno fixa.
+- A autorização administrativa é validada contra o proprietário, equipe ou lista configurada no Discord antes da emissão de uma sessão curta de 4 horas.
+- Todos os fluxos OAuth usam `state` assinado, cookie temporário e URI de retorno fixa.
 - Ações administrativas exigem origem válida, confirmação na interface e entram na auditoria.
 - Limites de requisição usam um identificador HMAC temporário; o endereço IP puro não é armazenado.
 - Webhooks do Discord exigem assinatura Ed25519 válida.
+- Webhooks com timestamp antigo são recusados para impedir repetição de eventos capturados.
+- Se o armazenamento de limites estiver indisponível, uma proteção local temporária continua restringindo tentativas abusivas.
 - Segredos permanecem exclusivamente nas variáveis protegidas da Cloudflare.
 
 ## Retenção

@@ -130,6 +130,9 @@ function hexBytes(value) {
 export async function verifyDiscordRequest(request, rawBody, env) {
   const signature = hexBytes(request.headers.get('x-signature-ed25519') || '');
   const timestamp = request.headers.get('x-signature-timestamp') || '';
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)
+    || Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > 5 * 60) return false;
   let publicKeyHex = env.DISCORD_PUBLIC_KEY || '';
   if (!publicKeyHex) {
     const application = await publicApplication(env.DISCORD_CLIENT_ID) || await applicationMetadata(env);

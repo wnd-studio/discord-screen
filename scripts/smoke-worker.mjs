@@ -41,6 +41,15 @@ assert.match(health.headers.get('strict-transport-security') || '', /max-age=/);
 assert.equal(health.headers.get('cache-control'), 'no-store');
 assert.equal((await health.json()).architecture, 'cloudflare-workers-durable-objects');
 
+const oauthLogin = await fetch(`${base}/auth/login`, { redirect: 'manual' });
+assert.equal(oauthLogin.status, 302);
+assert.ok(new URL(oauthLogin.headers.get('location')).searchParams.get('state'));
+assert.match(oauthLogin.headers.get('set-cookie') || '', /discord_screen_oauth_state=/);
+assert.equal(oauthLogin.headers.get('cache-control'), 'no-store');
+const oauthWithoutState = await fetch(`${base}/auth/callback?code=falso`, { redirect: 'manual' });
+assert.equal(oauthWithoutState.status, 302);
+assert.match(oauthWithoutState.headers.get('location') || '', /erro=estado_invalido/);
+
 const guest = await post('/api/session-guest', { name: 'Teste' });
 assert.equal(guest.response.status, 200);
 assert.ok(guest.data.identity);

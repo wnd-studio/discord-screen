@@ -15,6 +15,7 @@ const CHANGELOG_SETUP_TTL = 20 * 60;
 const DISCORD_MESSAGE_PERMISSIONS = 1024 + 2048 + 16384;
 const BOT_STATUS_CACHE_MS = 60_000;
 let botStatusCache = null;
+const fallbackRateLimits = new Map();
 
 function originFor(request, env) {
   return String(env.PUBLIC_ORIGIN || new URL(request.url).origin).replace(/\/+$/, '');
@@ -75,10 +76,27 @@ async function requestFingerprint(request, env) {
 
 async function enforceRateLimit(request, env, group, limit, windowMs = 60_000) {
   const fingerprint = await requestFingerprint(request, env);
+  const bucket = `${group}:${fingerprint}`;
   const checked = await internal(registry(env), '/rate/check', {
-    bucket: `${group}:${fingerprint}`, limit, windowMs,
+    bucket, limit, windowMs,
   }).catch(() => null);
-  if (!checked) return null;
+  if (!checked) {
+    const now = Date.now();
+    const current = fallbackRateLimits.get(bucket);
+    const entry = !current || now - current.startedAt >= windowMs
+      ? { hits: 1, startedAt: now }
+      : { hits: current.hits + 1, startedAt: current.startedAt };
+    fallbackRateLimits.set(bucket, entry);
+    if (fallbackRateLimits.size > 5000) {
+      for (const [key, value] of fallbackRateLimits) {
+        if (now - value.startedAt >= windowMs) fallbackRateLimits.delete(key);
+      }
+    }
+    if (entry.hits <= limit) return null;
+    return error('Muitas tentativas. Aguarde um pouco e tente novamente.', 429, {
+      reason: 'limite', retryAfter: Math.max(1, Math.ceil((windowMs - (now - entry.startedAt)) / 1000)),
+    });
+  }
   if (checked.data.allowed !== false) return null;
   return error('Muitas tentativas. Aguarde um pouco e tente novamente.', 429, {
     reason: 'limite', retryAfter: checked.data.retryAfter,
@@ -891,7 +909,6 @@ async function oauth(request, env, url) {
     target.searchParams.set('redirect_uri', redirectUri);
     target.searchParams.set('response_type', 'code');
     target.searchParams.set('scope', 'identify');
-    const response = Response.redirect(target, 302);
     if (url.pathname === '/admin/login') {
       const state = await signToken({ scope: 'admin-oauth', nonce: crypto.randomUUID() }, env.SESSION_SECRET, 10 * 60);
       target.searchParams.set('state', state);
@@ -902,18 +919,31 @@ async function oauth(request, env, url) {
       );
       return withState;
     }
-    return response;
+    const state = await signToken({ scope: 'user-oauth', nonce: crypto.randomUUID() }, env.SESSION_SECRET, 10 * 60);
+    target.searchParams.set('state', state);
+    const withState = new Response(null, { status: 302, headers: { location: target.toString() } });
+    withState.headers.append(
+      'set-cookie',
+      `${OAUTH_STATE_COOKIE}=${encodeURIComponent(state)}; Path=/auth/callback; Max-Age=600; HttpOnly; Secure; SameSite=Lax`
+    );
+    return withState;
   }
 
   const stateToken = url.searchParams.get('state');
   const state = await verifyToken(stateToken, env.SESSION_SECRET);
   const adminFlow = state?.scope === 'admin-oauth';
   const installFlow = state?.scope === 'changelog-install';
-  if (adminFlow && cookies(request)[OAUTH_STATE_COOKIE] !== stateToken) {
-    return Response.redirect(`${origin}/admin?erro=estado_invalido`, 302);
+  const userFlow = state?.scope === 'user-oauth';
+  if ((adminFlow || userFlow) && cookies(request)[OAUTH_STATE_COOKIE] !== stateToken) {
+    return Response.redirect(adminFlow
+      ? `${origin}/admin?erro=estado_invalido`
+      : `${origin}/?erro=estado_invalido`, 302);
   }
   if (installFlow && cookies(request)[INSTALL_STATE_COOKIE] !== stateToken) {
     return Response.redirect(`${origin}/changelog/setup?erro=estado_invalido`, 302);
+  }
+  if (!adminFlow && !installFlow && !userFlow) {
+    return Response.redirect(`${origin}/?erro=estado_invalido`, 302);
   }
   const failureTarget = adminFlow
     ? `${origin}/admin`
@@ -986,7 +1016,15 @@ async function oauth(request, env, url) {
   }
 
   const identity = await issueIdentity(env, WEB_INSTANCE, me.id, me.global_name || me.username, me.avatar ?? null);
-  return Response.redirect(`${origin}/#identity=${encodeURIComponent(identity.identity)}`, 302);
+  const response = new Response(null, {
+    status: 302,
+    headers: { location: `${origin}/#identity=${encodeURIComponent(identity.identity)}` },
+  });
+  response.headers.append(
+    'set-cookie',
+    `${OAUTH_STATE_COOKIE}=; Path=/auth/callback; Max-Age=0; HttpOnly; Secure; SameSite=Lax`
+  );
+  return response;
 }
 
 export default {
