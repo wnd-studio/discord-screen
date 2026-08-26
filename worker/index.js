@@ -292,11 +292,23 @@ async function adminApi(request, env, url, data) {
   }
 
   if (url.pathname === '/api/admin/overview') {
-    const [overview, application, bot] = await Promise.all([
-      internal(registry(env), '/admin/overview', {}),
-      applicationMetadata(env),
-      botDiagnostics(env),
+    const [overviewResult, application, bot] = await Promise.all([
+      internal(registry(env), '/admin/overview', {}).catch((problem) => ({
+        response: null,
+        data: null,
+        problem,
+      })),
+      applicationMetadata(env).catch(() => null),
+      botDiagnostics(env).catch(() => ({ configured: Boolean(env.DISCORD_BOT_TOKEN), valid: false })),
     ]);
+    const storageAvailable = Boolean(overviewResult.response && overviewResult.data);
+    const overview = storageAvailable ? overviewResult : {
+      response: { status: 200 },
+      data: {
+        generatedAt: Date.now(), totals: {}, rooms: [], servers: [], blocks: [], audit: [], daily: [],
+        maintenance: false, supporters: [], analytics: {}, changelog: { channels: [], history: [] },
+      },
+    };
     const webhookConfigured = Boolean(application?.event_webhooks_types?.length)
       || application?.event_webhooks_status === 2;
     if (env.DISCORD_BOT_TOKEN) {
@@ -316,6 +328,10 @@ async function adminApi(request, env, url, data) {
       }));
     }
     const alerts = [];
+    if (!storageAvailable) alerts.push({
+      level: 'error',
+      message: 'As métricas estão temporariamente indisponíveis porque a cota diária de armazenamento da Cloudflare foi atingida. O painel voltará a carregá-las após a renovação da cota.',
+    });
     if (!bot.valid) alerts.push({ level: 'error', message: 'O bot do Discord não está respondendo corretamente.' });
     if (!webhookConfigured) alerts.push({ level: 'warning', message: 'O Discord ainda não confirmou o webhook de eventos.' });
     if (Number(overview.data.totals?.activePeople || 0) >= 40) {
@@ -339,6 +355,7 @@ async function adminApi(request, env, url, data) {
         nameRetentionDays: 30,
         auditRetentionDays: 180,
         rateLimits: true,
+        storageAvailable,
         webhookConfigured,
         alerts,
       },
@@ -602,7 +619,8 @@ async function api(request, env, url) {
     limited = await enforceRateLimit(request, env, 'session', 40);
   } else if (request.method === 'POST' && ['/api/rooms/create', '/api/rooms/join'].includes(url.pathname)) {
     limited = await enforceRateLimit(request, env, 'rooms', 80);
-  } else if (request.method === 'POST' && url.pathname.startsWith('/api/admin/')) {
+  } else if (request.method === 'POST'
+    && ['/api/admin/action', '/api/admin/changelog/publish'].includes(url.pathname)) {
     limited = await enforceRateLimit(request, env, 'admin', 120);
   }
   if (limited) return limited;

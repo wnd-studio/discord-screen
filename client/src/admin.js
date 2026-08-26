@@ -569,7 +569,10 @@ async function start() {
     $('#welcome').textContent = `Olá, ${admin.name}`;
     $('#adminIdentity').textContent = `Administrador: ${admin.name} · ${admin.id}`;
     await loadOverview();
-    refreshTimer = setInterval(() => loadOverview(true), 10_000);
+    // O panorama administrativo faz consultas analíticas extensas. Atualizar a
+    // cada poucos segundos consumia rapidamente a cota diária gratuita do
+    // Durable Objects; cinco minutos mantém o painel útil sem desperdiçar cota.
+    refreshTimer = setInterval(() => loadOverview(true), 5 * 60_000);
   } catch (problem) {
     if (problem?.message && problem.status !== 401) {
       $('#loginMessage').textContent = `Não foi possível validar a sessão: ${problem.message}`;
