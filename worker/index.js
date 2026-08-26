@@ -77,7 +77,8 @@ async function enforceRateLimit(request, env, group, limit, windowMs = 60_000) {
   const fingerprint = await requestFingerprint(request, env);
   const checked = await internal(registry(env), '/rate/check', {
     bucket: `${group}:${fingerprint}`, limit, windowMs,
-  });
+  }).catch(() => null);
+  if (!checked) return null;
   if (checked.data.allowed !== false) return null;
   return error('Muitas tentativas. Aguarde um pouco e tente novamente.', 429, {
     reason: 'limite', retryAfter: checked.data.retryAfter,
@@ -89,7 +90,8 @@ function validMutationOrigin(request, env) {
 }
 
 async function blockFor(env, userId, guildId = null) {
-  const result = await internal(registry(env), '/block/check', { userId, guildId });
+  const result = await internal(registry(env), '/block/check', { userId, guildId }).catch(() => null);
+  if (!result) return null;
   return result.data.blocked ? result.data.block : null;
 }
 
@@ -112,7 +114,7 @@ function blockedResponse(block) {
 
 async function issueIdentity(env, instance, uid, name, avatar, ttl = 8 * 60 * 60, extra = {}) {
   const supporterResult = /^\d{15,21}$/.test(String(uid))
-    ? await internal(registry(env), '/supporter/get', { userId: uid })
+    ? await internal(registry(env), '/supporter/get', { userId: uid }).catch(() => null)
     : null;
   const supporter = supporterResult?.data?.supporter
     ? { tier: supporterResult.data.supporter.tier, expiresAt: supporterResult.data.supporter.expiresAt }
@@ -687,7 +689,7 @@ async function api(request, env, url) {
       userId: me.id,
       userName: me.global_name || me.username,
       verifiedGuild: Boolean(guild),
-    });
+    }).catch(() => null);
     const context = {
       guild: data.guild_id || null,
       channel: data.channel_id || null,
@@ -711,7 +713,7 @@ async function api(request, env, url) {
       guildId: data.guild_id || null, guildName: data.guild_name || null,
       channelId: data.channel_id || data.call || null, channelName: data.channel_name || null,
       instance: data.instance_id || 'dev', userId: uid, userName: data.name || 'Dev', verifiedGuild: true,
-    });
+    }).catch(() => null);
     return json(await issueIdentity(env, data.instance_id || 'dev', uid, data.name || 'Dev', null, 8 * 60 * 60, context));
   }
 

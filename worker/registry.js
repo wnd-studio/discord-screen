@@ -67,6 +67,7 @@ export class RoomRegistry extends DurableObject {
       );
       CREATE INDEX IF NOT EXISTS usage_kind_time ON usage_events(kind, created_at DESC);
       CREATE INDEX IF NOT EXISTS usage_guild_time ON usage_events(guild_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS usage_time ON usage_events(created_at DESC);
 
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +152,7 @@ export class RoomRegistry extends DurableObject {
       try { this.ctx.storage.sql.exec(statement); } catch {}
     }
     this.ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS rooms_guild ON rooms(guild_id)');
+    this.ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS usage_time ON usage_events(created_at DESC)');
   }
 
   addEvent(payload) {
@@ -535,7 +537,7 @@ export class RoomRegistry extends DurableObject {
       return json({ ok: true });
     }
 
-    if (url.pathname === '/admin/overview') return this.adminOverview();
+    if (url.pathname === '/admin/overview') return this.adminOverviewEfficient();
 
     return new Response('Not found', { status: 404 });
   }
@@ -565,6 +567,211 @@ export class RoomRegistry extends DurableObject {
       };
     }));
     return json({ rooms: rooms.filter(Boolean) });
+  }
+
+  async adminOverviewEfficient() {
+    const now = Date.now();
+    const since30d = now - 30 * DAY_MS;
+    const roomRows = this.ctx.storage.sql.exec(
+      `SELECT id, instance, name, owner_name, owner_id, guild_id, channel_id, is_call, created_at
+       FROM rooms ORDER BY created_at DESC LIMIT 100`
+    ).toArray();
+    const rooms = (await Promise.all(roomRows.map(async (row) => {
+      const stub = this.env.ROOMS.get(this.env.ROOMS.idFromName(row.id));
+      const response = await stub.fetch('https://room.internal/admin/inspect').catch(() => null);
+      if (!response?.ok) return null;
+      const live = await response.json().catch(() => ({}));
+      return {
+        id: row.id, instance: row.instance, name: row.name, ownerName: row.owner_name,
+        ownerId: row.owner_id, guildId: row.guild_id, channelId: row.channel_id,
+        isCall: Boolean(row.is_call), createdAt: row.created_at, ...live,
+      };
+    }))).filter(Boolean);
+    const servers = this.ctx.storage.sql.exec(
+      `SELECT guild_id, name, icon, first_seen, last_seen, last_channel_id,
+              last_channel_name, launches, installed, installed_at, authorized_by, authorized_by_name
+       FROM servers ORDER BY last_seen DESC LIMIT 100`
+    ).toArray().map((row) => ({
+      guildId: row.guild_id, name: row.name, icon: row.icon, firstSeen: row.first_seen,
+      lastSeen: row.last_seen, lastChannelId: row.last_channel_id,
+      lastChannelName: row.last_channel_name, launches: Number(row.launches || 0),
+      installed: Boolean(row.installed), installedAt: row.installed_at,
+      authorizedBy: row.authorized_by, authorizedByName: row.authorized_by_name,
+    }));
+    const blocks = this.ctx.storage.sql.exec(
+      `SELECT subject_type, subject_id, reason, expires_at, created_by, created_at
+       FROM blocks ORDER BY created_at DESC LIMIT 100`
+    ).toArray().map((row) => ({
+      subjectType: row.subject_type, subjectId: row.subject_id, reason: row.reason,
+      expiresAt: row.expires_at, createdBy: row.created_by, createdAt: row.created_at,
+    }));
+    const audit = this.ctx.storage.sql.exec(
+      `SELECT admin_id, admin_name, action, target_type, target_id, details, created_at
+       FROM admin_audit ORDER BY created_at DESC LIMIT 50`
+    ).toArray().map((row) => ({
+      adminId: row.admin_id, adminName: row.admin_name, action: row.action,
+      targetType: row.target_type, targetId: row.target_id,
+      details: parseDetails(row.details), createdAt: row.created_at,
+    }));
+
+    // Limite rígido: o custo do painel não cresce junto com o histórico. O
+    // índice por data permite buscar somente os eventos recentes necessários.
+    const events = this.ctx.storage.sql.exec(
+      `SELECT kind, guild_id, user_id, duration_ms, created_at, details
+       FROM usage_events WHERE created_at >= ? ORDER BY created_at DESC LIMIT 2000`, since30d
+    ).toArray().map((row) => ({ ...row, details: parseDetails(row.details) || {} }));
+    const days = new Map();
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, launches: 0 }));
+    const users = new Set();
+    const guilds = new Set();
+    const kinds = new Map();
+    const codecs = new Map();
+    const topServersMap = new Map();
+    let streamedMs = 0;
+    let completed = 0;
+    let withAudio = 0;
+    let disconnected = 0;
+    let roomClosed = 0;
+    let widthSum = 0; let widthCount = 0;
+    let heightSum = 0; let heightCount = 0;
+    let bitrateSum = 0; let bitrateCount = 0;
+    let fpsSum = 0; let fpsCount = 0;
+    let callRooms = 0; let linkRooms = 0;
+    for (const event of events) {
+      const date = new Date(Number(event.created_at));
+      const day = date.toISOString().slice(0, 10);
+      const daily = days.get(day) || { day, launches: 0, rooms: 0, streams: 0, streamedMs: 0 };
+      if (event.kind === 'activity_launch') {
+        daily.launches++;
+        const brazilHour = (date.getUTCHours() + 21) % 24;
+        hours[brazilHour].launches++;
+        if (event.user_id) users.add(event.user_id);
+        if (event.guild_id) {
+          guilds.add(event.guild_id);
+          const current = topServersMap.get(event.guild_id) || { launches: 0, lastSeen: 0 };
+          current.launches++;
+          current.lastSeen = Math.max(current.lastSeen, Number(event.created_at));
+          topServersMap.set(event.guild_id, current);
+        }
+      } else if (event.kind === 'room_created') {
+        daily.rooms++;
+        if (event.details?.isCall) callRooms++; else linkRooms++;
+      } else if (event.kind === 'stream_started') daily.streams++;
+      else if (event.kind === 'stream_stopped') {
+        const duration = Number(event.duration_ms || 0);
+        daily.streamedMs += duration;
+        streamedMs += duration;
+        completed++;
+        if (event.details?.audio) withAudio++;
+        if (event.details?.reason === 'disconnect') disconnected++;
+        if (event.details?.reason === 'room_closed') roomClosed++;
+        const config = event.details?.config || {};
+        for (const [value, add] of [
+          [config.width, (n) => { widthSum += n; widthCount++; }],
+          [config.height, (n) => { heightSum += n; heightCount++; }],
+          [config.bitrate, (n) => { bitrateSum += n; bitrateCount++; }],
+          [config.framerate, (n) => { fpsSum += n; fpsCount++; }],
+        ]) if (Number.isFinite(Number(value)) && Number(value) > 0) add(Number(value));
+        const codec = cleanText(config.codec, 40) || 'não informado';
+        codecs.set(codec, (codecs.get(codec) || 0) + 1);
+      }
+      days.set(day, daily);
+      const kind = kinds.get(event.kind) || { kind: event.kind, total: 0, lastSeen: 0 };
+      kind.total++;
+      kind.lastSeen = Math.max(kind.lastSeen, Number(event.created_at));
+      kinds.set(event.kind, kind);
+    }
+    const daily = [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+    const last7 = now - 7 * DAY_MS;
+    const previous7 = now - 14 * DAY_MS;
+    const countKind = (kind, from, to = Infinity) => events.filter((event) => (
+      event.kind === kind && Number(event.created_at) >= from && Number(event.created_at) < to
+    )).length;
+    const streamDurations = events
+      .filter((event) => event.kind === 'stream_stopped' && Number.isFinite(Number(event.duration_ms)))
+      .map((event) => Number(event.duration_ms));
+    const serverNames = new Map(servers.map((server) => [server.guildId, server.name || 'Servidor sem nome']));
+    const topServers = [...topServersMap.entries()].map(([guildId, value]) => ({
+      guildId, name: serverNames.get(guildId) || 'Servidor sem nome', ...value,
+    })).sort((a, b) => b.launches - a.launches).slice(0, 10);
+    const changelogChannels = this.ctx.storage.sql.exec(
+      `SELECT guild_id, guild_name, channel_id, channel_name, enabled, updated_at,
+              last_sent_at, last_error FROM changelog_channels ORDER BY updated_at DESC LIMIT 100`
+    ).toArray().map((row) => ({
+      guildId: row.guild_id, guildName: row.guild_name, channelId: row.channel_id,
+      channelName: row.channel_name, enabled: Boolean(row.enabled), updatedAt: row.updated_at,
+      lastSentAt: row.last_sent_at, lastError: row.last_error,
+    }));
+    const changelogHistory = this.ctx.storage.sql.exec(
+      `SELECT id, version, title, success_count, failure_count, created_by, created_at
+       FROM changelog_publications ORDER BY created_at DESC LIMIT 20`
+    ).toArray().map((row) => ({
+      id: row.id, version: row.version, title: row.title,
+      successCount: row.success_count, failureCount: row.failure_count,
+      createdBy: row.created_by, createdAt: row.created_at,
+    }));
+    const supporters = this.ctx.storage.sql.exec(
+      `SELECT user_id, tier, public_name, show_credit, started_at, expires_at, created_by, updated_at
+       FROM supporters ORDER BY CASE tier WHEN 'founder' THEN 0 ELSE 1 END, updated_at DESC LIMIT 100`
+    ).toArray().map((row) => ({
+      userId: row.user_id, tier: row.tier, publicName: row.public_name,
+      showCredit: Boolean(row.show_credit), startedAt: row.started_at, expiresAt: row.expires_at,
+      createdBy: row.created_by, updatedAt: row.updated_at,
+      active: row.expires_at === null || row.expires_at > now,
+    }));
+    const maintenance = this.ctx.storage.sql.exec(
+      "SELECT value FROM settings WHERE key = 'maintenance'"
+    ).toArray()[0]?.value === 'true';
+    const launches30d = countKind('activity_launch', since30d);
+    const streams30d = countKind('stream_started', since30d);
+    const rooms30d = countKind('room_created', since30d);
+    return json({
+      generatedAt: now,
+      approximateMetrics: events.length >= 2000,
+      totals: {
+        servers: servers.length,
+        launches: servers.reduce((sum, server) => sum + server.launches, 0),
+        launches30d, uniqueUsers30d: users.size, streams30d, streamedMs30d: streamedMs,
+        activeRooms: rooms.length,
+        activePeople: rooms.reduce((sum, room) => sum + Number(room.people || 0), 0),
+        activeStreams: rooms.reduce((sum, room) => sum + Number(room.streams?.length || room.streamCount || 0), 0),
+      },
+      rooms, servers, blocks, audit, daily: daily.slice(-14), maintenance, supporters,
+      analytics: {
+        daily, hourly: hours,
+        summary: {
+          launches7d: countKind('activity_launch', last7),
+          previousLaunches7d: countKind('activity_launch', previous7, last7),
+          streams7d: countKind('stream_started', last7),
+          previousStreams7d: countKind('stream_started', previous7, last7),
+          rooms30d, activeServers30d: guilds.size, completedStreams30d: completed,
+          averageStreamMs30d: streamDurations.length ? streamedMs / streamDurations.length : 0,
+          longestStreamMs30d: streamDurations.length ? Math.max(...streamDurations) : 0,
+        },
+        topServers,
+        technical: {
+          completedStreams30d: completed, streamsWithAudio30d: withAudio,
+          disconnectedStreams30d: disconnected, roomClosedStreams30d: roomClosed,
+          averageWidth30d: widthCount ? Math.round(widthSum / widthCount) : 0,
+          averageHeight30d: heightCount ? Math.round(heightSum / heightCount) : 0,
+          averageBitrate30d: bitrateCount ? Math.round(bitrateSum / bitrateCount) : 0,
+          averageFps30d: fpsCount ? Math.round(fpsSum / fpsCount) : 0,
+          callRooms30d: callRooms, linkRooms30d: linkRooms,
+          knownServers: servers.length, installedServers: servers.filter((server) => server.installed).length,
+        },
+        codecs: [...codecs.entries()].map(([codec, total]) => ({ codec, total })).sort((a, b) => b.total - a.total),
+        eventKinds: [...kinds.values()].sort((a, b) => b.total - a.total),
+        dataInventory: {
+          storedEvents: events.length,
+          oldestEventAt: events.length ? Math.min(...events.map((event) => Number(event.created_at))) : 0,
+          newestEventAt: events.length ? Math.max(...events.map((event) => Number(event.created_at))) : 0,
+          activeUsers24h: new Set(events.filter((event) => Number(event.created_at) >= now - DAY_MS).map((event) => event.user_id).filter(Boolean)).size,
+          activeUsers7d: new Set(events.filter((event) => Number(event.created_at) >= last7).map((event) => event.user_id).filter(Boolean)).size,
+          activeServers7d: new Set(events.filter((event) => Number(event.created_at) >= last7).map((event) => event.guild_id).filter(Boolean)).size,
+        },
+      },
+      changelog: { channels: changelogChannels, history: changelogHistory },
+    });
   }
 
   async adminOverview() {

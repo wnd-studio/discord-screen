@@ -572,7 +572,9 @@ async function start() {
     // O panorama administrativo faz consultas analíticas extensas. Atualizar a
     // cada poucos segundos consumia rapidamente a cota diária gratuita do
     // Durable Objects; cinco minutos mantém o painel útil sem desperdiçar cota.
-    refreshTimer = setInterval(() => loadOverview(true), 5 * 60_000);
+    refreshTimer = setInterval(() => {
+      if (!document.hidden) loadOverview(true);
+    }, 5 * 60_000);
   } catch (problem) {
     if (problem?.message && problem.status !== 401) {
       $('#loginMessage').textContent = `Não foi possível validar a sessão: ${problem.message}`;
@@ -580,6 +582,10 @@ async function start() {
     showLogin();
   }
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && dashboard.hidden === false) loadOverview(true);
+});
 
 $('#refresh').onclick = () => loadOverview();
 $('#enableMaintenance').onclick = () => action(

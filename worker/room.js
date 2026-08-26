@@ -495,7 +495,7 @@ export class Room extends DurableObject {
         config: attachment?.config ?? null,
         audio: Boolean(attachment?.audioConfig),
       },
-    }));
+    }).catch(() => null));
   }
 
   async destroy(reason, socketReason) {
