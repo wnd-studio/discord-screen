@@ -20,7 +20,7 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "EMERGENCY_MAINTENANCE": "true",
+    "EMERGENCY_MAINTENANCE": "false",
     "SUPPORT_URL": "https://github.com/wnd-studio/discord-screen"
   },
   "observability": { "enabled": true }
