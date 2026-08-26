@@ -94,8 +94,15 @@ async function blockFor(env, userId, guildId = null) {
 }
 
 async function maintenanceEnabled(env) {
-  const result = await internal(registry(env), '/setting/get', { key: 'maintenance' });
-  return result.data.value === 'true';
+  if (String(env.EMERGENCY_MAINTENANCE || '').toLowerCase() === 'true') return true;
+  try {
+    const result = await internal(registry(env), '/setting/get', { key: 'maintenance' });
+    return result.data.value === 'true';
+  } catch {
+    // Se o armazenamento temporariamente não puder ser consultado, o modo
+    // emergencial acima continua permitindo suspender novas sessões.
+    return false;
+  }
 }
 
 function blockedResponse(block) {
@@ -306,7 +313,8 @@ async function adminApi(request, env, url, data) {
       response: { status: 200 },
       data: {
         generatedAt: Date.now(), totals: {}, rooms: [], servers: [], blocks: [], audit: [], daily: [],
-        maintenance: false, supporters: [], analytics: {}, changelog: { channels: [], history: [] },
+        maintenance: String(env.EMERGENCY_MAINTENANCE || '').toLowerCase() === 'true',
+        supporters: [], analytics: {}, changelog: { channels: [], history: [] },
       },
     };
     const webhookConfigured = Boolean(application?.event_webhooks_types?.length)
@@ -613,6 +621,12 @@ async function changelogApi(request, env, url, data) {
 
 async function api(request, env, url) {
   const data = request.method === 'POST' ? await body(request) : {};
+
+  if (request.method === 'POST'
+    && ['/api/session', '/api/session-guest'].includes(url.pathname)
+    && String(env.EMERGENCY_MAINTENANCE || '').toLowerCase() === 'true') {
+    return error('O aplicativo está em manutenção. Tente novamente mais tarde.', 503, { reason: 'manutencao' });
+  }
 
   let limited = null;
   if (request.method === 'POST' && ['/api/token', '/api/session', '/api/session-guest'].includes(url.pathname)) {
