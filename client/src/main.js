@@ -1400,7 +1400,7 @@ function inRoom() {
 
 // A lista precisa se atualizar sozinha: salas abrem, enchem e fecham enquanto
 // alguém olha o lobby parado.
-const LOBBY_REFRESH_MS = 4000;
+const LOBBY_REFRESH_MS = 30_000;
 let lobbyTimer = null;
 
 /**
@@ -1892,6 +1892,25 @@ function connect() {
     // para qual decodificador — som e imagem dividem o mesmo canal.
     if (typeof e.data !== 'string') {
       const view = new DataView(e.data);
+      // Lotes: [slot][tipo 4/5][quantidade u16][tamanho u32 + pacote]...
+      // O relay não abre mídia; o cliente restaura aqui os pacotes originais.
+      if (view.getUint8(1) === 4 || view.getUint8(1) === 5) {
+        const count = view.getUint16(2);
+        let offset = 4;
+        for (let i = 0; i < count && offset + 4 <= e.data.byteLength; i++) {
+          const length = view.getUint32(offset);
+          offset += 4;
+          if (length < 18 || offset + length > e.data.byteLength) break;
+          const packet = e.data.slice(offset, offset + length);
+          offset += length;
+          const packetView = new DataView(packet);
+          const stream = streams.get(packetView.getUint8(0));
+          if (!stream) continue;
+          if (packetView.getUint8(1) === 3) stream.audio?.push(packet);
+          else stream.player.push(packet);
+        }
+        return;
+      }
       const s = streams.get(view.getUint8(0));
       if (!s) return;
       if (view.getUint8(1) === 3) s.audio?.push(e.data);

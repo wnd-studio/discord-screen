@@ -11,6 +11,7 @@ const LOCKOUT_MS = 30_000;
 const EMPTY_GRACE_MS = 12_000;
 const KEYFRAME = 1;
 const AUDIO = 3;
+const AUDIO_BATCH = 4;
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 
 const accessPower = (value) => ACCESS_POWER[value] ?? 0;
@@ -395,8 +396,8 @@ export class Room extends DurableObject {
     for (const viewer of this.sockets('viewer')) {
       const a = this.attachment(viewer);
       if (!a.watching.includes(broadcaster.slot)) continue;
-      if ((a.audioOnly ?? []).includes(broadcaster.slot) && type !== AUDIO) continue;
-      if (type !== AUDIO && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
+      if ((a.audioOnly ?? []).includes(broadcaster.slot) && type !== AUDIO && type !== AUDIO_BATCH) continue;
+      if (type !== AUDIO && type !== AUDIO_BATCH && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
       const limit = type === KEYFRAME ? MAX_BUFFERED_BYTES * 2 : MAX_BUFFERED_BYTES;
       if (viewer.bufferedAmount > limit) { this.meta.droppedChunks++; continue; }
       safeSend(viewer, message);
