@@ -40,7 +40,7 @@ const TIPO_AUDIO = 3;
 const TIPO_LOTE_MIDIA = 4;
 // Um único lote curto mantém áudio e vídeo juntos. O modelo anterior usava
 // dois relógios de 200 ms e fazia o vídeo chegar em rajadas perceptíveis.
-const LOTE_MS = 100;
+const LOTE_MS = 50;
 
 // 96 kbps em Opus estéreo é transparente para som de aplicativo e de vídeo, e é
 // ruído perto dos megabits do vídeo — não vale economizar aqui.
@@ -752,7 +752,10 @@ export function createBroadcaster({
     }
     receivedFrames++;
     // Backpressure: fila no encoder vira latência que nunca mais sai.
-    if (encoder.encodeQueueSize > 2) {
+    // Filas muito curtas faziam encoders por hardware descartarem quadros em
+    // máquinas perfeitamente capazes. Cinco ainda limita o atraso acumulado,
+    // mas tolera pequenas oscilações do sistema e do navegador.
+    if (encoder.encodeQueueSize > 5) {
       droppedFrames++;
       frame.close();
       return true;
@@ -909,11 +912,14 @@ export function createBroadcaster({
   }
 
   function adaptiveSettings() {
+    // Sob carga, reduzir FPS alivia o encoder sem transformar texto e jogos em
+    // uma imagem borrada. Resolução e bitrate escolhidos pelo usuário ficam
+    // preservados em todos os níveis.
     const levels = [
       { fps: requestedFps, scale: 1, bitrate: requestedBitrate },
-      { fps: Math.min(requestedFps, 30), scale: 0.85, bitrate: requestedBitrate * 0.8 },
-      { fps: Math.min(requestedFps, 24), scale: 0.7, bitrate: requestedBitrate * 0.6 },
-      { fps: Math.min(requestedFps, 15), scale: 0.55, bitrate: requestedBitrate * 0.4 },
+      { fps: Math.min(requestedFps, 30), scale: 1, bitrate: requestedBitrate },
+      { fps: Math.min(requestedFps, 24), scale: 1, bitrate: requestedBitrate },
+      { fps: Math.min(requestedFps, 15), scale: 1, bitrate: requestedBitrate },
     ];
     const current = levels[adaptiveLevel];
     return {
