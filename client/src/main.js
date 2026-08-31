@@ -1892,9 +1892,9 @@ function connect() {
     // para qual decodificador — som e imagem dividem o mesmo canal.
     if (typeof e.data !== 'string') {
       const view = new DataView(e.data);
-      // Lotes: [slot][tipo 4/5][quantidade u16][tamanho u32 + pacote]...
+      // Lote: [slot][tipo 4][quantidade u16][tamanho u32 + pacote]...
       // O relay não abre mídia; o cliente restaura aqui os pacotes originais.
-      if (view.getUint8(1) === 4 || view.getUint8(1) === 5) {
+      if (view.getUint8(1) === 4) {
         const count = view.getUint16(2);
         let offset = 4;
         for (let i = 0; i < count && offset + 4 <= e.data.byteLength; i++) {

@@ -11,7 +11,7 @@ const LOCKOUT_MS = 30_000;
 const EMPTY_GRACE_MS = 12_000;
 const KEYFRAME = 1;
 const AUDIO = 3;
-const AUDIO_BATCH = 4;
+const MEDIA_BATCH = 4;
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 
 const accessPower = (value) => ACCESS_POWER[value] ?? 0;
@@ -21,6 +21,40 @@ const safeSend = (ws, value) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(value);
   } catch {}
 };
+
+// Espectadores em segundo plano pedem somente áudio. Como o transmissor envia
+// um lote misto para poupar requisições, o Durable Object extrai apenas os
+// pacotes Opus sem decodificar nem alterar a mídia.
+function audioOnlyBatch(bytes) {
+  if (bytes.byteLength < 4) return null;
+  const source = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = source.getUint16(2);
+  const packets = [];
+  let offset = 4;
+  for (let i = 0; i < count && offset + 4 <= bytes.byteLength; i++) {
+    const length = source.getUint32(offset);
+    offset += 4;
+    if (length < 18 || offset + length > bytes.byteLength) break;
+    const packet = bytes.slice(offset, offset + length);
+    offset += length;
+    if (packet[1] === AUDIO) packets.push(packet);
+  }
+  if (!packets.length) return null;
+  const total = 4 + packets.reduce((sum, packet) => sum + 4 + packet.byteLength, 0);
+  const output = new ArrayBuffer(total);
+  const view = new DataView(output);
+  view.setUint8(0, bytes[0]);
+  view.setUint8(1, MEDIA_BATCH);
+  view.setUint16(2, packets.length);
+  offset = 4;
+  for (const packet of packets) {
+    view.setUint32(offset, packet.byteLength);
+    offset += 4;
+    new Uint8Array(output, offset, packet.byteLength).set(packet);
+    offset += packet.byteLength;
+  }
+  return output;
+}
 
 function decodeHeaderJson(value) {
   if (!value) throw new Error('Cabeçalho ausente');
@@ -396,8 +430,14 @@ export class Room extends DurableObject {
     for (const viewer of this.sockets('viewer')) {
       const a = this.attachment(viewer);
       if (!a.watching.includes(broadcaster.slot)) continue;
-      if ((a.audioOnly ?? []).includes(broadcaster.slot) && type !== AUDIO && type !== AUDIO_BATCH) continue;
-      if (type !== AUDIO && type !== AUDIO_BATCH && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
+      const audioOnly = (a.audioOnly ?? []).includes(broadcaster.slot);
+      if (audioOnly && type === MEDIA_BATCH) {
+        const audio = audioOnlyBatch(bytes);
+        if (audio && viewer.bufferedAmount <= MAX_BUFFERED_BYTES) safeSend(viewer, audio);
+        continue;
+      }
+      if (audioOnly && type !== AUDIO) continue;
+      if (type !== AUDIO && type !== MEDIA_BATCH && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
       const limit = type === KEYFRAME ? MAX_BUFFERED_BYTES * 2 : MAX_BUFFERED_BYTES;
       if (viewer.bufferedAmount > limit) { this.meta.droppedChunks++; continue; }
       safeSend(viewer, message);

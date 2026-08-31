@@ -37,9 +37,10 @@ const KEYFRAME_EVERY_MS = 3000;
 const TIPO_KEYFRAME = 1;
 const TIPO_DELTA = 2;
 const TIPO_AUDIO = 3;
-const TIPO_LOTE_AUDIO = 4;
-const TIPO_LOTE_VIDEO = 5;
-const LOTE_MS = 200;
+const TIPO_LOTE_MIDIA = 4;
+// Um único lote curto mantém áudio e vídeo juntos. O modelo anterior usava
+// dois relógios de 200 ms e fazia o vídeo chegar em rajadas perceptíveis.
+const LOTE_MS = 100;
 
 // 96 kbps em Opus estéreo é transparente para som de aplicativo e de vídeo, e é
 // ruído perto dos megabits do vídeo — não vale economizar aqui.
@@ -170,10 +171,8 @@ export function createBroadcaster({
   let reconnectAttempts = 0;
   let stopping = false;
   let lastAudioConfig = null;
-  let audioBatch = [];
-  let videoBatch = [];
-  let audioBatchTimer = null;
-  let videoBatchTimer = null;
+  let mediaBatch = [];
+  let mediaBatchTimer = null;
 
   // A escolha da pessoa é o teto. O modo adaptativo só desce temporariamente
   // quando o encoder não acompanha e volta a subir depois de estabilizar.
@@ -641,7 +640,7 @@ export function createBroadcaster({
 
     const data = new Uint8Array(chunk.byteLength);
     chunk.copyTo(data);
-    queueBatch('audio', empacotar(TIPO_AUDIO, chunk.timestamp ?? 0, data));
+    queueBatch(empacotar(TIPO_AUDIO, chunk.timestamp ?? 0, data));
     bytes += 18 + data.byteLength;
   }
 
@@ -1017,39 +1016,31 @@ export function createBroadcaster({
     // Keyframes destravam novos espectadores e seguem imediatamente. Os
     // demais quadros viajam agrupados para economizar a cota de mensagens.
     if (chunk.type === 'key') {
-      flushBatch('video');
+      flushBatch();
       ws.send(buf);
     } else {
-      queueBatch('video', buf);
+      queueBatch(buf);
     }
     bytes += buf.byteLength;
   }
 
-  function queueBatch(kind, packet) {
-    const isAudio = kind === 'audio';
-    const batch = isAudio ? audioBatch : videoBatch;
-    batch.push(packet);
-    if (isAudio ? audioBatchTimer : videoBatchTimer) return;
-    const timer = setTimeout(() => flushBatch(kind), LOTE_MS);
-    if (isAudio) audioBatchTimer = timer;
-    else videoBatchTimer = timer;
+  function queueBatch(packet) {
+    mediaBatch.push(packet);
+    if (mediaBatchTimer) return;
+    mediaBatchTimer = setTimeout(flushBatch, LOTE_MS);
   }
 
-  function flushBatch(kind) {
-    const isAudio = kind === 'audio';
-    const batch = isAudio ? audioBatch : videoBatch;
-    const timer = isAudio ? audioBatchTimer : videoBatchTimer;
-    if (timer) clearTimeout(timer);
-    if (isAudio) audioBatchTimer = null;
-    else videoBatchTimer = null;
-    if (!batch.length) return;
-    const packets = batch.splice(0);
+  function flushBatch() {
+    if (mediaBatchTimer) clearTimeout(mediaBatchTimer);
+    mediaBatchTimer = null;
+    if (!mediaBatch.length) return;
+    const packets = mediaBatch.splice(0);
     if (ws?.readyState !== WebSocket.OPEN) return;
     const total = 4 + packets.reduce((sum, packet) => sum + 4 + packet.byteLength, 0);
     const bundled = new ArrayBuffer(total);
     const view = new DataView(bundled);
     view.setUint8(0, mySlot);
-    view.setUint8(1, isAudio ? TIPO_LOTE_AUDIO : TIPO_LOTE_VIDEO);
+    view.setUint8(1, TIPO_LOTE_MIDIA);
     view.setUint16(2, packets.length);
     let offset = 4;
     for (const packet of packets) {
@@ -1371,16 +1362,12 @@ export function createBroadcaster({
     lastAudioConfig = null;
 
     if (ws?.readyState === WebSocket.OPEN) {
-      flushBatch('video');
-      flushBatch('audio');
+      flushBatch();
       ws.send(JSON.stringify({ type: 'stop' }));
     }
-    clearTimeout(videoBatchTimer);
-    clearTimeout(audioBatchTimer);
-    videoBatchTimer = null;
-    audioBatchTimer = null;
-    videoBatch.length = 0;
-    audioBatch.length = 0;
+    clearTimeout(mediaBatchTimer);
+    mediaBatchTimer = null;
+    mediaBatch.length = 0;
     if (ws && ws.readyState !== WebSocket.CLOSED) ws.close();
     ws = null;
 
