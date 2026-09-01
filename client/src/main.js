@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.21';
+const NEWS_VERSION = '0.8.22';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -236,9 +236,14 @@ const slotOf = (userId) =>
 function watchSlot(slot) {
   const info = available.get(slot);
   if (!info) return;
+  // Um clique explícito sempre pede vídeo. Dentro do iframe do Discord, a
+  // Visibility API pode dizer "hidden" mesmo com a Activity na frente; antes
+  // isso mandava áudio-only logo após o watch e o botão parecia não funcionar.
+  clearTimeout(backgroundTimer);
+  if (audioOnlyBackground) setBackgroundAudioOnly(false);
   watching.add(slot);
   ws?.send(JSON.stringify({ type: 'watch', slot }));
-  if (audioOnlyBackground) ws?.send(JSON.stringify({ type: 'audio-only', slot, enabled: true }));
+  ws?.send(JSON.stringify({ type: 'audio-only', slot, enabled: false }));
   // O config pode já ter chegado; se não, ele chega logo e dispara o start.
   if (info.config) {
     openStream(slot, info.userId);
@@ -1075,7 +1080,7 @@ function setBackgroundAudioOnly(enabled) {
 
 function scheduleBackgroundMode() {
   clearTimeout(backgroundTimer);
-  const hidden = document.visibilityState === 'hidden';
+  const hidden = document.visibilityState === 'hidden' && !document.hasFocus();
   // Ao voltar, retoma imediatamente. A pequena espera só existe ao sair para
   // não reagir a mudanças rápidas de janela/overlay do próprio Discord.
   if (!hidden) {

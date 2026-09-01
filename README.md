@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/Discord-Activity-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord Activity">
     <img src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare Workers">
     <img src="https://img.shields.io/badge/WebSocket-tempo_real-111827?style=flat-square" alt="WebSocket em tempo real">
-    <img src="https://img.shields.io/badge/versao-0.8.21-22C55E?style=flat-square" alt="Versão 0.8.21">
+    <img src="https://img.shields.io/badge/versao-0.8.22-22C55E?style=flat-square" alt="Versão 0.8.22">
   </p>
 
   <p>

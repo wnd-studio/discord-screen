@@ -362,13 +362,21 @@ export class Room extends DurableObject {
     if (msg.type === 'rename' && typeof msg.name === 'string') {
       const name = msg.name.replace(/\s+/g, ' ').trim().slice(0, 32);
       if (name) { a.name = name; this.save(ws, a); this.broadcastState(); }
-    } else if (msg.type === 'watch' && Number.isInteger(msg.slot) && !a.watching.includes(msg.slot)) {
+    } else if (msg.type === 'watch' && Number.isInteger(msg.slot)) {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.slot === msg.slot && ba.streaming);
       if (!broadcaster) return;
-      a.watching.push(msg.slot); a.primed = a.primed.filter((slot) => slot !== msg.slot); this.save(ws, a);
+      const newlyWatching = !a.watching.includes(msg.slot);
+      if (newlyWatching) a.watching.push(msg.slot);
+      // Repetir "assistir" é deliberadamente idempotente: se uma mensagem de
+      // configuração se perdeu, o próximo clique recupera o vídeo em vez de
+      // ficar preso para sempre no convite.
+      a.audioOnly = (a.audioOnly ?? []).filter((slot) => slot !== msg.slot);
+      a.primed = a.primed.filter((slot) => slot !== msg.slot);
+      this.save(ws, a);
       if (broadcaster.a.config) safeSend(ws, JSON.stringify({ type: 'config', slot: msg.slot, config: broadcaster.a.config }));
       if (broadcaster.a.audioConfig) safeSend(ws, JSON.stringify({ type: 'audio-config', slot: msg.slot, config: broadcaster.a.audioConfig }));
-      safeSend(broadcaster.ws, JSON.stringify({ type: 'need-keyframe' })); this.broadcastState();
+      safeSend(broadcaster.ws, JSON.stringify({ type: 'need-keyframe' }));
+      if (newlyWatching) this.broadcastState();
     } else if (msg.type === 'unwatch' && Number.isInteger(msg.slot)) {
       const before = a.watching.length; a.watching = a.watching.filter((slot) => slot !== msg.slot); a.primed = a.primed.filter((slot) => slot !== msg.slot); a.audioOnly = (a.audioOnly ?? []).filter((slot) => slot !== msg.slot); this.save(ws, a);
       if (a.watching.length !== before) this.broadcastState();
