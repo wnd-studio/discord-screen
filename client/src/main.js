@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.19';
+const NEWS_VERSION = '0.8.20';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -2139,8 +2139,8 @@ let modalMode = 'start';
 
 const sharePresets = {
   economy: { bitrate: '1000000', fps: '15', economy: true },
-  balanced: { bitrate: '5000000', fps: '30', economy: false },
-  motion: { bitrate: '8000000', fps: '60', economy: false },
+  balanced: { bitrate: '4000000', fps: '30', economy: false },
+  motion: { bitrate: '6000000', fps: '60', economy: false },
 };
 
 function selectedPreset() {
@@ -2189,7 +2189,7 @@ function openModal(mode) {
     const savedQuality = read('broadcastQuality');
     $('mQuality').value = $('mEconomy').checked
       ? '1000000'
-      : (!savedQuality || savedQuality === '2500000' ? '5000000' : savedQuality);
+      : (!savedQuality || savedQuality === '2500000' ? '4000000' : savedQuality);
     $('mFps').value = $('mEconomy').checked ? '15' : read('broadcastFps') || '30';
     $('mAudio').checked = mobileDevice || read('broadcastAudio') === '1';
     $('mCamera').checked = !mobileDevice && read('broadcastCamera') === '1';

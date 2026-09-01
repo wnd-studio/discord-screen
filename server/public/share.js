@@ -8,7 +8,7 @@
  * Toda a lógica de captura e codificação vive em /shared/broadcaster.js, a mesma
  * usada dentro da Activity — aqui é só a interface.
  */
-import { compatibilityInfo, createBroadcaster, supportError } from '/shared/broadcaster.js?v=7';
+import { compatibilityInfo, createBroadcaster, supportError } from '/shared/broadcaster.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 

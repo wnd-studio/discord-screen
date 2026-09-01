@@ -40,7 +40,11 @@ const TIPO_AUDIO = 3;
 const TIPO_LOTE_MIDIA = 4;
 // Um único lote curto mantém áudio e vídeo juntos. O modelo anterior usava
 // dois relógios de 200 ms e fazia o vídeo chegar em rajadas perceptíveis.
-const LOTE_MS = 50;
+const LOTE_MS = 100;
+// Impede que uma conexão de upload lenta transforme a transmissão em uma
+// gravação atrasada. Acima deste ponto descartamos até a fila esvaziar e então
+// retomamos por um keyframe recente.
+const MAX_UPSTREAM_BUFFER = 512 * 1024;
 
 // 96 kbps em Opus estéreo é transparente para som de aplicativo e de vídeo, e é
 // ruído perto dos megabits do vídeo — não vale economizar aqui.
@@ -637,6 +641,7 @@ export function createBroadcaster({
 
   function onAudioEncoded(chunk) {
     if (viewers === 0 || ws?.readyState !== WebSocket.OPEN) return;
+    if (ws.bufferedAmount > MAX_UPSTREAM_BUFFER) return;
 
     const data = new Uint8Array(chunk.byteLength);
     chunk.copyTo(data);
@@ -1019,14 +1024,14 @@ export function createBroadcaster({
       chunk.timestamp ?? 0,
       data
     );
-    // Keyframes destravam novos espectadores e seguem imediatamente. Os
-    // demais quadros viajam agrupados para economizar a cota de mensagens.
-    if (chunk.type === 'key') {
-      flushBatch();
-      ws.send(buf);
-    } else {
-      queueBatch(buf);
+    // Vídeo precisa chegar continuamente. Agrupá-lo, mesmo por poucos
+    // milissegundos, criava rajadas que todos percebiam como travamento.
+    if (ws.bufferedAmount > MAX_UPSTREAM_BUFFER) {
+      droppedFrames++;
+      wantKeyframe = true;
+      return;
     }
+    ws.send(buf);
     bytes += buf.byteLength;
   }
 
