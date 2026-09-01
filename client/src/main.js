@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.20';
+const NEWS_VERSION = '0.8.21';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -947,11 +947,12 @@ function renderBar() {
   $('roomHint').hidden = !inRoom() || casters.length > 0 || read('roomHintDismissed') === '1';
 
   const btn = $('share');
+  btn.hidden = iAmCasting;
   btn.classList.toggle('go', !iAmCasting);
   btn.classList.toggle('live', iAmCasting);
   btn.disabled = false;
 
-  const rotuloShare = iAmCasting ? 'Parar transmissão' : 'Compartilhar tela';
+  const rotuloShare = 'Compartilhar tela';
   $('shareLabel').textContent = rotuloShare;
   btn.dataset.tip = rotuloShare;
   btn.setAttribute('aria-label', rotuloShare);
@@ -2119,12 +2120,6 @@ function stopMyBroadcast() {
 
 $('share').addEventListener('click', () => {
   if (!session) return;
-
-  if (iAmBroadcasting()) {
-    stopMyBroadcast();
-    renderBar();
-    return;
-  }
 
   store('roomHintDismissed', '1');
   $('roomHint').hidden = true;

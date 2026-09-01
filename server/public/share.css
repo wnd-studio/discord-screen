@@ -373,6 +373,41 @@ button:disabled {
   font-size: 12px;
 }
 
+.live-settings {
+  margin: 0 0 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #1e1f22;
+}
+
+.live-settings > p {
+  margin: 3px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.live-settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(100px, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.live-settings-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.live-settings-grid select {
+  width: 100%;
+  max-width: none;
+}
+
+.live-settings .secondary {
+  margin-bottom: 0;
+}
+
 .status {
   margin: 16px 0 0;
   min-height: 20px;
@@ -409,4 +444,9 @@ footer p {
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
+}
+
+@media (max-width: 480px) {
+  .live-settings-grid { grid-template-columns: 1fr; }
+  .live-settings-grid select { max-width: none; }
 }

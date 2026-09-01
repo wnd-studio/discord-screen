@@ -9,7 +9,7 @@
          dos cabeçalhos no-store guardou a versão antiga por heurística do
          navegador, e continuaria usando ela para sempre. Trocar a query força
          uma URL nova. Incremente ao publicar mudanças nesses arquivos. -->
-    <link rel="stylesheet" href="/share.css?v=17" />
+    <link rel="stylesheet" href="/share.css?v=18" />
   </head>
   <body>
     <main class="card">
@@ -129,6 +129,30 @@
           <div><strong id="bitrate">—</strong><span>enviando</span></div>
           <div><strong id="elapsed">00:00</strong><span>no ar</span></div>
         </div>
+        <div class="live-settings" aria-labelledby="liveSettingsTitle">
+          <strong id="liveSettingsTitle">Qualidade da transmissão</strong>
+          <p>Você pode ajustar sem interromper a transmissão.</p>
+          <div class="live-settings-grid">
+            <label for="liveQuality">Qualidade
+              <select id="liveQuality">
+                <option value="1000000">Leve — 1 Mbps</option>
+                <option value="2500000">Boa — 2,5 Mbps</option>
+                <option value="4000000">Recomendada — 4 Mbps</option>
+                <option value="5000000">Alta — 5 Mbps</option>
+                <option value="6000000">Movimento — 6 Mbps</option>
+                <option value="8000000">Máxima — 8 Mbps</option>
+              </select>
+            </label>
+            <label for="liveFps">Quadros
+              <select id="liveFps">
+                <option value="15">15 fps</option>
+                <option value="30">30 fps</option>
+                <option value="60">60 fps</option>
+              </select>
+            </label>
+          </div>
+          <button id="applyLiveQuality" class="secondary">Aplicar qualidade</button>
+        </div>
         <button id="somAba" class="secondary" hidden>Trocar fonte do áudio</button>
         <button id="cameraToggle" class="secondary">Ligar câmera</button>
         <button id="switchMobileCamera" class="secondary" hidden>Trocar câmera</button>
@@ -142,6 +166,6 @@
       </footer>
     </main>
 
-    <script type="module" src="/share.js?v=18"></script>
+    <script type="module" src="/share.js?v=19"></script>
   </body>
 </html>

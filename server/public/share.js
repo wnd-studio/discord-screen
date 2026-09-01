@@ -312,6 +312,8 @@ async function goLive() {
     $('preview').play().catch(() => {});
     $('setup').hidden = true;
     $('live').hidden = false;
+    $('liveQuality').value = $('quality').value;
+    $('liveFps').value = $('fps').value;
     $('live').insertBefore($('cameraOptions'), $('cameraToggle'));
     $('live').insertBefore(document.querySelector('.audio-test'), document.querySelector('.stats'));
     setStatus('Transmissão iniciada.', 'ok');
@@ -329,6 +331,23 @@ async function goLive() {
     setStatus(friendlyError(err), 'error');
   }
 }
+
+$('applyLiveQuality').addEventListener('click', () => {
+  if (!broadcaster) return;
+  const current = broadcaster.getSettings();
+  const bitrate = Number($('liveQuality').value);
+  const fps = Number($('liveFps').value);
+  broadcaster.setQuality({
+    bitrate,
+    fps,
+    maxWidth: current.maxWidth,
+    maxHeight: current.maxHeight,
+  });
+  $('quality').value = String(bitrate);
+  $('fps').value = String(fps);
+  const mbps = (bitrate / 1e6).toFixed(1).replace('.', ',');
+  setStatus(`Qualidade alterada para ${mbps} Mb/s e ${fps} fps.`, 'ok');
+});
 
 function setAudioTest(level, label, help) {
   const percent = Math.round(Math.min(1, Math.max(0, level || 0)) * 100);
