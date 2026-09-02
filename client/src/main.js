@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.22';
+const NEWS_VERSION = '0.8.23';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -630,6 +630,13 @@ function buildWatchers(slot) {
     '<circle cx="12" cy="7" r="4"/></svg>';
   badge.append(document.createTextNode(String(people.length)));
   badge.title = people.length === 1 ? '1 pessoa assistindo' : `${people.length} pessoas assistindo`;
+  badge.tabIndex = 0;
+  badge.setAttribute('role', 'button');
+  badge.setAttribute('aria-label', badge.title);
+  badge.addEventListener('click', (event) => {
+    event.stopPropagation();
+    badge.classList.toggle('open');
+  });
 
   const list = document.createElement('div');
   list.className = 'hover-list';
@@ -1026,6 +1033,11 @@ function startAudio(slot, config) {
   renderGrid();
   renderBar();
 }
+
+// Listas que abriam apenas com hover também precisam ser utilizáveis por toque.
+$('people').tabIndex = 0;
+$('people').setAttribute('role', 'button');
+$('people').addEventListener('click', () => $('people').classList.toggle('open'));
 
 function clearVideoResume(slot) {
   const timers = videoResumeTimers.get(slot) ?? [];
@@ -2268,6 +2280,7 @@ function renderVolume() {
   $('mute').classList.toggle('on', volume === 0);
   $('muteOn').hidden = volume === 0;
   $('muteOff').hidden = volume !== 0;
+  $('volumeMuteAction').textContent = volume === 0 ? 'Ligar som' : 'Silenciar';
 }
 
 function setVolume(valor) {
@@ -2279,9 +2292,30 @@ function setVolume(valor) {
   renderVolume();
 }
 
-// Clique no alto-falante silencia e devolve; o cursor ajusta no meio termo.
-$('mute').addEventListener('click', () => setVolume(volume === 0 ? volumeAntes : 0));
+// No computador o alto-falante continua sendo o atalho de silenciar. Em telas
+// de toque ele abre primeiro o cursor, que antes dependia de hover e parecia
+// inexistente no celular.
+$('mute').addEventListener('click', (event) => {
+  const touchInterface = mobileDevice || matchMedia('(hover: none), (pointer: coarse)').matches;
+  if (touchInterface) {
+    event.stopPropagation();
+    const box = $('volumeBox');
+    const open = !box.classList.contains('open');
+    box.classList.toggle('open', open);
+    $('mute').setAttribute('aria-expanded', String(open));
+    return;
+  }
+  setVolume(volume === 0 ? volumeAntes : 0);
+});
+$('volumeMuteAction').addEventListener('click', () => setVolume(volume === 0 ? volumeAntes : 0));
 $('volume').addEventListener('input', (e) => setVolume(Number(e.target.value) / 100));
+
+document.addEventListener('pointerdown', (event) => {
+  if (!$('volumeBox').contains(event.target)) {
+    $('volumeBox').classList.remove('open');
+    $('mute').setAttribute('aria-expanded', 'false');
+  }
+});
 
 $('modalSwap').addEventListener('click', async () => {
   if (!myBroadcast) return;

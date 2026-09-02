@@ -216,6 +216,7 @@
                   value="100"
                   aria-label="Volume"
                 />
+                <button id="volumeMuteAction" class="volume-mute-action" type="button">Silenciar</button>
               </div>
             </div>
             <button id="fullscreen" class="btn" data-tip="Tela cheia" aria-label="Tela cheia" hidden>
@@ -462,26 +463,26 @@
 
       <div id="newsModal" class="modal" hidden>
         <div class="modal-card news-card" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
-          <div class="news-kicker">BUILD 0.8.22</div>
-          <h2 id="newsTitle">Correção para assistir transmissões</h2>
-          <p class="modal-sub">O botão de assistir agora recupera o vídeo imediatamente, inclusive dentro da atividade do Discord.</p>
+          <div class="news-kicker">BUILD 0.8.23</div>
+          <h2 id="newsTitle">Melhorias para celular</h2>
+          <p class="modal-sub">Os principais controles de quem assiste agora funcionam de forma clara também por toque.</p>
 
           <ul class="news-list">
             <li>
-              <span class="news-icon">▶️</span>
-              <div><strong>“Ver minha tela” corrigido</strong><p>O clique agora solicita a imagem mesmo quando o Discord identifica incorretamente a atividade como segundo plano.</p></div>
-            </li>
-            <li>
-              <span class="news-icon">🔄</span>
-              <div><strong>Recuperação automática</strong><p>Se a primeira configuração do vídeo se perder, o aplicativo pode solicitá-la novamente sem sair da sala.</p></div>
+              <span class="news-icon">🔊</span>
+              <div><strong>Volume geral no celular</strong><p>Toque no alto-falante para abrir o controle e escolher qualquer volume entre 0% e 100%.</p></div>
             </li>
             <li>
               <span class="news-icon">🎚️</span>
-              <div><strong>Ajustes ao vivo mantidos</strong><p>Qualidade e quadros continuam podendo ser alterados pela janela de transmissão.</p></div>
+              <div><strong>Volume por transmissão</strong><p>O botão individual agora fica visível em aparelhos de toque e permite ajustar cada pessoa separadamente.</p></div>
             </li>
             <li>
-              <span class="news-icon">🎧</span>
-              <div><strong>Economia em segundo plano</strong><p>O modo somente áudio continua ativo quando você realmente troca de janela.</p></div>
+              <span class="news-icon">📱</span>
+              <div><strong>Troca entre transmissões</strong><p>Quando houver várias telas, elas aparecem numa faixa rolável abaixo do vídeo principal.</p></div>
+            </li>
+            <li>
+              <span class="news-icon">👆</span>
+              <div><strong>Controles por toque</strong><p>Fixar, parar de assistir, ver espectadores e abrir a lista da sala não dependem mais de passar o mouse.</p></div>
             </li>
           </ul>
 
