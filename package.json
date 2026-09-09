@@ -1,6 +1,6 @@
 {
   "name": "discord-screen",
-  "version": "0.8.23",
+  "version": "0.8.24",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -11,7 +11,7 @@
     "check": "wrangler deploy --dry-run",
     "test:webhook": "node scripts/test-discord-webhook.mjs",
     "smoke": "node scripts/smoke-worker.mjs",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "node scripts/build-worker.mjs && wrangler deploy",
     "cf:typegen": "wrangler types"
   },
   "devDependencies": {

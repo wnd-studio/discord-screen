@@ -5,6 +5,9 @@ const toast = $('#toast');
 let admin = null;
 let refreshTimer = null;
 let currentOverview = null;
+let overviewLoading = false;
+let overviewLoadedAt = 0;
+const OVERVIEW_FOCUS_THROTTLE_MS = 2 * 60_000;
 
 function showToast(message, isError = false) {
   toast.textContent = message;
@@ -563,10 +566,13 @@ function applyFilters() {
 }
 
 async function loadOverview(silent = false) {
+  if (overviewLoading) return;
+  overviewLoading = true;
   const refresh = $('#refresh');
   if (!silent) refresh.disabled = true;
   try {
     const data = await post('/api/admin/overview');
+    overviewLoadedAt = Date.now();
     currentOverview = data;
     renderStats(data.totals || {});
     renderChart(data.daily || []);
@@ -592,6 +598,7 @@ async function loadOverview(silent = false) {
     if (problem.status === 401) return showLogin();
     if (!silent) showToast(problem.message, true);
   } finally {
+    overviewLoading = false;
     refresh.disabled = false;
   }
 }
@@ -633,7 +640,9 @@ async function start() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && dashboard.hidden === false) loadOverview(true);
+  if (!document.hidden && dashboard.hidden === false && Date.now() - overviewLoadedAt >= OVERVIEW_FOCUS_THROTTLE_MS) {
+    loadOverview(true);
+  }
 });
 
 $('#refresh').onclick = () => loadOverview();

@@ -12,7 +12,9 @@ const EMPTY_GRACE_MS = 12_000;
 const KEYFRAME = 1;
 const AUDIO = 3;
 const MEDIA_BATCH = 4;
-const USAGE_FLUSH_MS = 60_000;
+// Um resumo a cada cinco minutos, mais um ao encerrar. Persistir a cada minuto
+// gastaria cota apenas para medir a própria cota, sem melhorar o ranking.
+const USAGE_FLUSH_MS = 5 * 60_000;
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 
 const accessPower = (value) => ACCESS_POWER[value] ?? 0;
@@ -397,6 +399,9 @@ export class Room extends DurableObject {
       }
       this.save(ws, a);
       safeSend(ws, JSON.stringify({ type: 'audio-only', slot: msg.slot, enabled: Boolean(msg.enabled) }));
+      // Atualiza também o transmissor: se todos estiverem em segundo plano,
+      // ele pode parar de codificar/enviar vídeo e manter somente o áudio.
+      this.broadcastState();
     } else if (msg.type === 'request-keyframe' && Number.isInteger(msg.slot) && a.watching.includes(msg.slot)) {
       const broadcaster = this.broadcasters().find(({ a: ba }) => ba.slot === msg.slot && ba.streaming);
       if (!broadcaster || (a.audioOnly ?? []).includes(msg.slot)) return;
@@ -544,6 +549,9 @@ export class Room extends DurableObject {
       streams: broadcasters.filter(({ a }) => a.streaming).map(({ a }) => ({
         slot: a.slot, userId: a.uid,
         watchers: this.viewers().filter(({ a: va }) => va.watching.includes(a.slot)).map(({ a: va }) => ({ id: va.uid, name: va.name, avatar: va.avatar ?? null })),
+        videoWatchers: this.viewers().filter(({ a: va }) => (
+          va.watching.includes(a.slot) && !(va.audioOnly ?? []).includes(a.slot)
+        )).length,
       })),
     };
   }

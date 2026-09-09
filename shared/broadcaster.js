@@ -170,6 +170,7 @@ export function createBroadcaster({
   let receivedFrames = 0;
   let droppedFrames = 0;
   let viewers = 0;
+  let videoViewers = 0;
   let statsTimer = null;
   let reconnectTimer = null;
   let reconnectAttempts = 0;
@@ -751,7 +752,7 @@ export function createBroadcaster({
     }
     // Sem ninguém assistindo, manter a captura aberta custa zero mensagens de
     // mídia. O primeiro `watch` pede um keyframe e retoma na hora.
-    if (viewers === 0) {
+    if (videoViewers === 0) {
       frame.close();
       return true;
     }
@@ -1009,7 +1010,7 @@ export function createBroadcaster({
   }
 
   function onEncoded(chunk, metadata) {
-    if (viewers === 0 || ws?.readyState !== WebSocket.OPEN) return;
+    if (videoViewers === 0 || ws?.readyState !== WebSocket.OPEN) return;
 
     // O decoderConfig chega no primeiro chunk e sempre que a config muda.
     if (metadata?.decoderConfig) {
@@ -1131,10 +1132,14 @@ export function createBroadcaster({
         else if (msg.type === 'state') {
           const mine = (msg.streams ?? []).find((stream) => stream.slot === mySlot);
           viewers = mine?.watchers?.length ?? 0;
+          videoViewers = Number.isFinite(Number(mine?.videoWatchers))
+            ? Number(mine.videoWatchers)
+            : viewers;
         }
         // Alguém entrou na sala e precisa de um ponto de partida.
         else if (msg.type === 'need-keyframe') {
           viewers = Math.max(1, viewers);
+          videoViewers = Math.max(1, videoViewers);
           wantKeyframe = true;
         }
         else if (msg.type === 'stop-request') stop('Transmissão encerrada pela atividade.');

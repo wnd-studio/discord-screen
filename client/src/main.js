@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.23';
+const NEWS_VERSION = '0.8.24';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -1418,8 +1418,11 @@ function inRoom() {
 
 // A lista precisa se atualizar sozinha: salas abrem, enchem e fecham enquanto
 // alguém olha o lobby parado.
-const LOBBY_REFRESH_MS = 30_000;
+// O lobby muda devagar e cada consulta acorda o Registry. Um minuto mantém a
+// lista atual sem transformar abas esquecidas em consumo permanente.
+const LOBBY_REFRESH_MS = 60_000;
 let lobbyTimer = null;
+let lobbyLoading = false;
 
 /**
  * Larga a sala atual por completo.
@@ -1484,11 +1487,13 @@ async function showLobby() {
     // Nenhum modal aberto: recarregar sob o cursor tiraria o card do lugar no
     // meio de um clique.
     const busy = ['createModal', 'joinModal'].some((id) => !$(id).hidden);
-    if (!busy && !$('lobby').hidden) loadRooms();
+    if (!document.hidden && !busy && !$('lobby').hidden) loadRooms();
   }, LOBBY_REFRESH_MS);
 }
 
 async function loadRooms() {
+  if (lobbyLoading) return;
+  lobbyLoading = true;
   const list = $('roomList');
 
   let rooms = [];
@@ -1497,6 +1502,8 @@ async function loadRooms() {
   } catch (err) {
     list.replaceChildren(msgRow(`Não foi possível carregar: ${err.message}`));
     return;
+  } finally {
+    lobbyLoading = false;
   }
 
   lobbyRooms = rooms;
