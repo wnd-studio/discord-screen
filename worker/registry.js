@@ -8,6 +8,7 @@ const AUDIT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 const PUBLICATION_RETENTION_MS = 365 * 24 * 60 * 60 * 1000;
 const USER_NAME_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const FREE_DURABLE_OBJECT_REQUESTS_PER_DAY = 100_000;
 
 const cleanText = (value, max = 120) => {
   const result = String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -68,6 +69,25 @@ export class RoomRegistry extends DurableObject {
       CREATE INDEX IF NOT EXISTS usage_kind_time ON usage_events(kind, created_at DESC);
       CREATE INDEX IF NOT EXISTS usage_guild_time ON usage_events(guild_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS usage_time ON usage_events(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS usage_rollups (
+        day TEXT NOT NULL,
+        guild_id TEXT NOT NULL,
+        media_messages INTEGER NOT NULL DEFAULT 0,
+        video_messages INTEGER NOT NULL DEFAULT 0,
+        audio_messages INTEGER NOT NULL DEFAULT 0,
+        inbound_bytes INTEGER NOT NULL DEFAULT 0,
+        outbound_messages INTEGER NOT NULL DEFAULT 0,
+        outbound_bytes INTEGER NOT NULL DEFAULT 0,
+        dropped_messages INTEGER NOT NULL DEFAULT 0,
+        dropped_bytes INTEGER NOT NULL DEFAULT 0,
+        samples INTEGER NOT NULL DEFAULT 0,
+        streams INTEGER NOT NULL DEFAULT 0,
+        streamed_ms INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY(day, guild_id)
+      );
+      CREATE INDEX IF NOT EXISTS usage_rollups_updated ON usage_rollups(updated_at DESC);
 
       CREATE TABLE IF NOT EXISTS admin_audit (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -182,6 +202,7 @@ export class RoomRegistry extends DurableObject {
     this.ctx.storage.sql.exec('DELETE FROM changelog_publications WHERE created_at < ?', now - PUBLICATION_RETENTION_MS);
     this.ctx.storage.sql.exec('DELETE FROM blocks WHERE expires_at IS NOT NULL AND expires_at <= ?', now);
     this.ctx.storage.sql.exec('DELETE FROM rate_limits WHERE window_start < ?', now - 2 * DAY_MS);
+    this.ctx.storage.sql.exec('DELETE FROM usage_rollups WHERE updated_at < ?', now - HISTORY_RETENTION_MS);
     this.ctx.storage.sql.exec(
       `INSERT INTO settings (key, value, updated_at) VALUES ('last_cleanup', ?, ?)
        ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
@@ -303,7 +324,11 @@ export class RoomRegistry extends DurableObject {
     }
 
     if (url.pathname === '/event') {
-      this.addEvent(payload);
+      if (payload.kind === 'media_usage') this.addUsageRollup(payload);
+      else {
+        this.addEvent(payload);
+        if (payload.kind === 'stream_started' || payload.kind === 'stream_stopped') this.addUsageRollup(payload);
+      }
       return json({ ok: true });
     }
 
@@ -569,6 +594,41 @@ export class RoomRegistry extends DurableObject {
     return json({ rooms: rooms.filter(Boolean) });
   }
 
+  addUsageRollup(payload) {
+    const guildId = cleanText(payload.guildId, 30) || 'web';
+    const createdAt = Number(payload.createdAt) || Date.now();
+    const day = new Date(createdAt).toISOString().slice(0, 10);
+    const details = payload.details || {};
+    const value = (name) => Math.max(0, Math.round(Number(details[name]) || 0));
+    const streamStarted = payload.kind === 'stream_started' ? 1 : 0;
+    const streamedMs = payload.kind === 'stream_stopped'
+      ? Math.max(0, Math.round(Number(payload.durationMs) || 0)) : 0;
+    this.ctx.storage.sql.exec(
+      `INSERT INTO usage_rollups
+       (day, guild_id, media_messages, video_messages, audio_messages, inbound_bytes,
+        outbound_messages, outbound_bytes, dropped_messages, dropped_bytes,
+        samples, streams, streamed_ms, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(day, guild_id) DO UPDATE SET
+         media_messages=media_messages+excluded.media_messages,
+         video_messages=video_messages+excluded.video_messages,
+         audio_messages=audio_messages+excluded.audio_messages,
+         inbound_bytes=inbound_bytes+excluded.inbound_bytes,
+         outbound_messages=outbound_messages+excluded.outbound_messages,
+         outbound_bytes=outbound_bytes+excluded.outbound_bytes,
+         dropped_messages=dropped_messages+excluded.dropped_messages,
+         dropped_bytes=dropped_bytes+excluded.dropped_bytes,
+         samples=samples+excluded.samples,
+         streams=streams+excluded.streams,
+         streamed_ms=streamed_ms+excluded.streamed_ms,
+         updated_at=excluded.updated_at`,
+      day, guildId, value('mediaMessages'), value('videoMessages'), value('audioMessages'),
+      value('inboundBytes'), value('outboundMessages'), value('outboundBytes'),
+      value('droppedMessages'), value('droppedBytes'), payload.kind === 'media_usage' ? 1 : 0,
+      streamStarted, streamedMs, createdAt
+    );
+  }
+
   async adminOverviewEfficient() {
     const now = Date.now();
     const since30d = now - 30 * DAY_MS;
@@ -694,6 +754,38 @@ export class RoomRegistry extends DurableObject {
     const topServers = [...topServersMap.entries()].map(([guildId, value]) => ({
       guildId, name: serverNames.get(guildId) || 'Servidor sem nome', ...value,
     })).sort((a, b) => b.launches - a.launches).slice(0, 10);
+    const utcDay = new Date(now).toISOString().slice(0, 10);
+    const usageRows = this.ctx.storage.sql.exec(
+      `SELECT guild_id, media_messages, video_messages, audio_messages, inbound_bytes,
+              outbound_messages, outbound_bytes, dropped_messages, dropped_bytes,
+              samples, streams, streamed_ms, updated_at
+       FROM usage_rollups WHERE day = ? ORDER BY media_messages DESC`, utcDay
+    ).toArray();
+    const trackedMediaMessages = usageRows.reduce((sum, row) => sum + Number(row.media_messages || 0), 0);
+    const trackedSamples = usageRows.reduce((sum, row) => sum + Number(row.samples || 0), 0);
+    // A cada 20 mensagens recebidas em WebSockets, a Cloudflare contabiliza uma
+    // requisiÃ§Ã£o de Durable Object. Cada resumo enviado ao Registry custa mais
+    // uma chamada interna. HTTP, conexÃµes e outros Workers permanecem fora desta estimativa.
+    const estimatedMediaRequests = Math.ceil(trackedMediaMessages / 20) + trackedSamples;
+    const quotaServers = usageRows.map((row) => {
+      const mediaMessages = Number(row.media_messages || 0);
+      const samples = Number(row.samples || 0);
+      const estimatedRequests = Math.ceil(mediaMessages / 20) + samples;
+      const quotaPercent = estimatedRequests / FREE_DURABLE_OBJECT_REQUESTS_PER_DAY * 100;
+      return {
+        guildId: row.guild_id,
+        name: row.guild_id === 'web' ? 'Uso pelo site / fora do Discord' : (serverNames.get(row.guild_id) || 'Servidor sem nome'),
+        mediaMessages, videoMessages: Number(row.video_messages || 0),
+        audioMessages: Number(row.audio_messages || 0), inboundBytes: Number(row.inbound_bytes || 0),
+        outboundMessages: Number(row.outbound_messages || 0), outboundBytes: Number(row.outbound_bytes || 0),
+        droppedMessages: Number(row.dropped_messages || 0), droppedBytes: Number(row.dropped_bytes || 0),
+        streams: Number(row.streams || 0), streamedMs: Number(row.streamed_ms || 0),
+        estimatedRequests, quotaPercent, sharePercent: estimatedMediaRequests ? estimatedRequests / estimatedMediaRequests * 100 : 0,
+        status: quotaPercent >= 25 ? 'high' : quotaPercent >= 10 ? 'attention' : 'normal',
+        updatedAt: Number(row.updated_at || 0),
+      };
+    }).sort((a, b) => b.estimatedRequests - a.estimatedRequests);
+    const nextUtcReset = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), new Date(now).getUTCDate() + 1);
     const changelogChannels = this.ctx.storage.sql.exec(
       `SELECT guild_id, guild_name, channel_id, channel_name, enabled, updated_at,
               last_sent_at, last_error FROM changelog_channels ORDER BY updated_at DESC LIMIT 100`
@@ -749,6 +841,19 @@ export class RoomRegistry extends DurableObject {
           longestStreamMs30d: streamDurations.length ? Math.max(...streamDurations) : 0,
         },
         topServers,
+        quotaUsage: {
+          day: utcDay,
+          dailyLimit: FREE_DURABLE_OBJECT_REQUESTS_PER_DAY,
+          estimatedMediaRequests,
+          estimatedQuotaPercent: estimatedMediaRequests / FREE_DURABLE_OBJECT_REQUESTS_PER_DAY * 100,
+          trackedMediaMessages,
+          trackedInboundBytes: quotaServers.reduce((sum, item) => sum + item.inboundBytes, 0),
+          trackedOutboundBytes: quotaServers.reduce((sum, item) => sum + item.outboundBytes, 0),
+          resetAt: nextUtcReset,
+          trackingStartedAt: usageRows.length ? Math.min(...usageRows.map((row) => Number(row.updated_at || now))) : null,
+          servers: quotaServers,
+          estimateOnly: true,
+        },
         technical: {
           completedStreams30d: completed, streamsWithAudio30d: withAudio,
           disconnectedStreams30d: disconnected, roomClosedStreams30d: roomClosed,

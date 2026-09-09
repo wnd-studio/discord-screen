@@ -12,6 +12,7 @@ const EMPTY_GRACE_MS = 12_000;
 const KEYFRAME = 1;
 const AUDIO = 3;
 const MEDIA_BATCH = 4;
+const USAGE_FLUSH_MS = 60_000;
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 
 const accessPower = (value) => ACCESS_POWER[value] ?? 0;
@@ -70,6 +71,8 @@ export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     this.meta = null;
+    this.usage = this.emptyUsage();
+    this.usageFlushAt = Date.now();
     this.ctx.blockConcurrencyWhile(async () => {
       this.meta = await this.ctx.storage.get('meta') ?? null;
       if (this.meta) {
@@ -427,6 +430,14 @@ export class Room extends DurableObject {
     }
   }
 
+  emptyUsage() {
+    return {
+      mediaMessages: 0, videoMessages: 0, audioMessages: 0,
+      inboundBytes: 0, outboundMessages: 0, outboundBytes: 0,
+      droppedMessages: 0, droppedBytes: 0,
+    };
+  }
+
   canModerate(actor, target) {
     return accessPower(actor?.access) > accessPower(target?.access);
   }
@@ -435,28 +446,57 @@ export class Room extends DurableObject {
     const bytes = message instanceof ArrayBuffer ? new Uint8Array(message) : new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
     if (bytes.length < 2 || bytes[0] !== broadcaster.slot) return;
     const type = bytes[1];
+    this.usage.mediaMessages++;
+    this.usage.inboundBytes += bytes.byteLength;
+    if (type === AUDIO) this.usage.audioMessages++;
+    else this.usage.videoMessages++;
     for (const viewer of this.sockets('viewer')) {
       const a = this.attachment(viewer);
       if (!a.watching.includes(broadcaster.slot)) continue;
       const audioOnly = (a.audioOnly ?? []).includes(broadcaster.slot);
       if (audioOnly && type === MEDIA_BATCH) {
         const audio = audioOnlyBatch(bytes);
-        if (audio && viewer.bufferedAmount <= MAX_BUFFERED_BYTES) safeSend(viewer, audio);
+        if (audio && viewer.bufferedAmount <= MAX_BUFFERED_BYTES) {
+          safeSend(viewer, audio);
+          this.usage.outboundMessages++;
+          this.usage.outboundBytes += audio.byteLength;
+        }
         continue;
       }
       if (audioOnly && type !== AUDIO) continue;
       if (type !== AUDIO && type !== MEDIA_BATCH && type !== KEYFRAME && !a.primed.includes(broadcaster.slot)) continue;
       const limit = type === KEYFRAME ? MAX_BUFFERED_BYTES * 2 : MAX_BUFFERED_BYTES;
-      if (viewer.bufferedAmount > limit) { this.meta.droppedChunks++; continue; }
+      if (viewer.bufferedAmount > limit) {
+        this.meta.droppedChunks++;
+        this.usage.droppedMessages++;
+        this.usage.droppedBytes += bytes.byteLength;
+        continue;
+      }
       safeSend(viewer, message);
+      this.usage.outboundMessages++;
+      this.usage.outboundBytes += bytes.byteLength;
       if (type === KEYFRAME && !a.primed.includes(broadcaster.slot)) { a.primed.push(broadcaster.slot); this.save(viewer, a); }
     }
+    if (Date.now() - this.usageFlushAt >= USAGE_FLUSH_MS) this.flushUsage();
+  }
+
+  flushUsage() {
+    if (!this.usage.mediaMessages || !this.meta) return;
+    const sample = this.usage;
+    this.usage = this.emptyUsage();
+    this.usageFlushAt = Date.now();
+    this.ctx.waitUntil(this.registry('/event', {
+      kind: 'media_usage', roomId: this.meta.id,
+      guildId: this.meta.guildId || 'web', channelId: this.meta.channelId,
+      createdAt: Date.now(), details: sample,
+    }).catch(() => null));
   }
 
   stopStream(ws, a) {
     if (!a.streaming) return;
     const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;
     this.recordEvent('stream_stopped', a, durationMs);
+    this.flushUsage();
     a.streaming = false; a.config = null; a.audioConfig = null; this.save(ws, a);
     for (const viewer of this.sockets('viewer')) {
       const va = this.attachment(viewer); va.watching = va.watching.filter((slot) => slot !== a.slot); va.primed = va.primed.filter((slot) => slot !== a.slot); va.audioOnly = (va.audioOnly ?? []).filter((slot) => slot !== a.slot); this.save(viewer, va);
@@ -474,6 +514,7 @@ export class Room extends DurableObject {
     if (a.role === 'broadcaster' && a.streaming) {
       const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;
       this.recordEvent('stream_stopped', a, durationMs, { reason: 'disconnect' });
+      this.flushUsage();
       a.streaming = false;
       this.save(ws, a);
       for (const viewer of this.sockets('viewer')) safeSend(viewer, JSON.stringify({ type: 'stream-stop', slot: a.slot }));
@@ -549,6 +590,7 @@ export class Room extends DurableObject {
 
   async destroy(reason, socketReason) {
     const roomId = this.meta.id;
+    this.flushUsage();
     for (const { ws, a } of this.broadcasters()) {
       if (a.streaming) {
         const durationMs = a.streamStartedAt ? Date.now() - a.streamStartedAt : null;

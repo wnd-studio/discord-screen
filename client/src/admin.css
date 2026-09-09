@@ -232,9 +232,27 @@ footer { margin-top: 26px; color: #757985; font-size: 11px; }
 .privacy-card h3 { margin: 0 0 10px; font-size: 15px; }
 .privacy-card ul { margin: 0; padding-left: 18px; color: #d6d8de; font-size: 12px; }
 .privacy-card p:last-child { margin: 12px 0 0; color: var(--muted); font-size: 10.5px; }
+.quota-summary { grid-template-columns: repeat(5, minmax(140px, 1fr)); }
+.quota-explanation { display: flex; gap: 10px; padding: 12px 14px; margin-bottom: 14px; border: 1px solid rgba(240,178,50,.3); border-radius: 10px; background: rgba(240,178,50,.055); font-size: 11px; }
+.quota-explanation span { color: var(--muted); }
+.quota-servers { gap: 7px; }
+.quota-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.quota-row.attention { border-color: rgba(240,178,50,.55); }
+.quota-row.high { border-color: rgba(237,66,69,.6); background: rgba(237,66,69,.05); }
+.quota-rank { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #292b33; color: var(--muted); font-size: 11px; font-weight: 700; }
+.quota-track { height: 5px; margin-top: 7px; overflow: hidden; border-radius: 99px; background: #292b33; }
+.quota-fill { display: block; height: 100%; min-width: 1px; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #8f98ff); }
+.quota-values { display: grid; gap: 3px; min-width: 190px; text-align: right; }
+.quota-values strong { font-size: 12px; }
+.quota-values span { color: var(--muted); font-size: 10px; }
+.quota-footnote { display: block; margin-top: 12px; }
 @media (max-width: 1150px) { .analytics-summary { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 760px) {
   .analytics-summary { grid-template-columns: repeat(2, 1fr); }
   .analytics-layout { grid-template-columns: 1fr; }
   .trend-column > span { display: none; }
+  .quota-summary { grid-template-columns: 1fr 1fr; }
+  .quota-explanation { flex-direction: column; }
+  .quota-row { grid-template-columns: 28px 1fr; }
+  .quota-values { grid-column: 2; min-width: 0; text-align: left; }
 }

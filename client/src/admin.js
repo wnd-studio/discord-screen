@@ -247,11 +247,59 @@ function renderAnalytics(analytics = {}) {
   }) : [empty('Nenhum servidor ativo neste período.') ]));
 }
 
+function renderQuotaUsage(quota = {}) {
+  const limit = Number(quota.dailyLimit || 100000);
+  const estimated = Number(quota.estimatedMediaRequests || 0);
+  const ratio = Number(quota.estimatedQuotaPercent || 0);
+  const cards = [
+    ['Cota rastreada hoje', `${ratio.toFixed(ratio < 1 ? 2 : 1)}%`, `${number(estimated)} de ${number(limit)} requisições/dia`],
+    ['Pacotes de mídia', number(quota.trackedMediaMessages), 'entrada de vídeo e áudio'],
+    ['Dados recebidos', bytes(quota.trackedInboundBytes), 'enviados pelos transmissores'],
+    ['Dados entregues', bytes(quota.trackedOutboundBytes), 'replicados aos espectadores'],
+    ['Próximo reinício', date(quota.resetAt), 'cota diária da Cloudflare'],
+  ];
+  $('#quotaSummary').replaceChildren(...cards.map(([label, value, detail]) => {
+    const card = el('article', 'metric-card');
+    card.append(el('span', '', label), el('strong', '', value), el('small', '', detail));
+    return card;
+  }));
+
+  const servers = quota.servers || [];
+  $('#quotaServers').replaceChildren(...(servers.length ? servers.map((server, index) => {
+    const row = el('div', `quota-row ${server.status || 'normal'}`);
+    const rank = el('span', 'quota-rank', String(index + 1));
+    const main = el('div', 'stack-main');
+    main.append(el('strong', '', server.name || 'Servidor sem nome'));
+    main.append(el('span', '', `${number(server.streams)} transmissão(ões) · ${duration(server.streamedMs)} · ${bytes(server.inboundBytes)} recebidos`));
+    const track = el('div', 'quota-track');
+    const fill = el('i', 'quota-fill');
+    fill.style.width = `${Math.min(100, Number(server.sharePercent || 0))}%`;
+    track.append(fill);
+    main.append(track);
+    const values = el('div', 'quota-values');
+    const quotaPercent = Number(server.quotaPercent || 0);
+    values.append(
+      el('strong', '', `${quotaPercent.toFixed(quotaPercent < 1 ? 2 : 1)}% da cota`),
+      el('span', '', `${number(server.estimatedRequests)} estimadas · ${Number(server.sharePercent || 0).toFixed(1)}% do uso rastreado`),
+    );
+    row.append(rank, main, values);
+    return row;
+  }) : [empty('A medição começa após esta atualização. Ainda não há transmissões registradas hoje.') ]));
+  $('#quotaFootnote').textContent = 'Privacidade: somente contadores agregados por servidor são armazenados. Nenhuma imagem, áudio ou conteúdo transmitido é salvo.';
+}
+
 const percent = (value, total) => total ? `${Math.round(Number(value || 0) / Number(total) * 100)}%` : '0%';
 const eventLabels = {
   activity_launch: 'Aberturas da Atividade', room_created: 'Salas criadas', room_deleted: 'Salas encerradas',
   stream_started: 'Transmissões iniciadas', stream_stopped: 'Transmissões finalizadas',
   application_authorized: 'Instalações autorizadas', application_deauthorized: 'Instalações removidas',
+};
+const bytes = (value) => {
+  let amount = Number(value || 0);
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let index = 0;
+  while (amount >= 1024 && index < units.length - 1) { amount /= 1024; index++; }
+  return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
 };
 
 function renderTechnicalAnalytics(analytics = {}) {
@@ -523,6 +571,7 @@ async function loadOverview(silent = false) {
     renderStats(data.totals || {});
     renderChart(data.daily || []);
     renderAnalytics(data.analytics || {});
+    renderQuotaUsage(data.analytics?.quotaUsage || {});
     renderTechnicalAnalytics(data.analytics || {});
     renderRooms(data.rooms || []);
     renderServers(data.servers || []);
