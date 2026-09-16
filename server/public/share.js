@@ -8,7 +8,7 @@
  * Toda a lógica de captura e codificação vive em /shared/broadcaster.js, a mesma
  * usada dentro da Activity — aqui é só a interface.
  */
-import { compatibilityInfo, createBroadcaster, supportError } from '/shared/broadcaster.js?v=8';
+import { compatibilityInfo, createBroadcaster, supportError } from '/shared/broadcaster.js?v=9';
 
 const $ = (id) => document.getElementById(id);
 
@@ -206,9 +206,10 @@ function buildBroadcaster() {
     audio: $('withAudio').checked,
     camera: $('withCamera').checked,
     captureMode,
+    contentType: query.get('content') === 'motion' ? 'motion' : 'text',
     facingMode,
-    maxWidth: query.get('eco') === '1' ? 1280 : 1920,
-    maxHeight: query.get('eco') === '1' ? 720 : 1080,
+    maxWidth: query.get('eco') === '1' ? 1280 : query.get('content') === 'motion' ? 1600 : 1920,
+    maxHeight: query.get('eco') === '1' ? 720 : query.get('content') === 'motion' ? 900 : 1080,
     cameraDeviceId: $('cameraDevice').value,
     cameraPosition: $('cameraPosition').value,
     cameraSize: $('cameraSize').value,

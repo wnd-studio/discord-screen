@@ -92,7 +92,7 @@ const videoResumeTimers = new Map();
 
 // Alterar este identificador faz o aviso aparecer uma vez novamente para cada
 // pessoa. O conteúdo continua acessível pelo botão Novidades.
-const NEWS_VERSION = '0.8.24';
+const NEWS_VERSION = '0.8.25';
 const ACCESS_POWER = { user: 0, moderator: 1, server_admin: 2, project_admin: 3 };
 const ACCESS_LABEL = {
   moderator: 'MOD',
@@ -2157,9 +2157,9 @@ $('share').addEventListener('click', () => {
 let modalMode = 'start';
 
 const sharePresets = {
-  economy: { bitrate: '1000000', fps: '15', economy: true },
-  balanced: { bitrate: '4000000', fps: '30', economy: false },
-  motion: { bitrate: '6000000', fps: '60', economy: false },
+  economy: { bitrate: '1000000', fps: '15', economy: true, motion: false },
+  balanced: { bitrate: '4000000', fps: '30', economy: false, motion: false },
+  motion: { bitrate: '8000000', fps: '60', economy: false, motion: true },
 };
 
 function selectedPreset() {
@@ -2409,9 +2409,10 @@ async function broadcastFromHere() {
     audio: $('mAudio').checked,
     camera: mobileDevice ? false : $('mCamera').checked,
     captureMode: mobileDevice ? 'camera' : 'screen',
+    contentType: selectedPreset() === 'motion' ? 'motion' : 'text',
     facingMode: $('mFacing').value,
-    maxWidth: $('mEconomy').checked ? 1280 : 1920,
-    maxHeight: $('mEconomy').checked ? 720 : 1080,
+    maxWidth: $('mEconomy').checked ? 1280 : selectedPreset() === 'motion' ? 1600 : 1920,
+    maxHeight: $('mEconomy').checked ? 720 : selectedPreset() === 'motion' ? 900 : 1080,
     cameraPosition: $('mCameraPosition').value,
     cameraSize: $('mCameraSize').value,
     onAviso: (m) => toast(m, true),
@@ -2483,8 +2484,8 @@ $('modalGo').addEventListener('click', async () => {
     myBroadcast?.setQuality({
       bitrate: Number($('mQuality').value),
       fps: Number($('mFps').value),
-      maxWidth: $('mEconomy').checked ? 1280 : 1920,
-      maxHeight: $('mEconomy').checked ? 720 : 1080,
+      maxWidth: $('mEconomy').checked ? 1280 : selectedPreset() === 'motion' ? 1600 : 1920,
+      maxHeight: $('mEconomy').checked ? 720 : selectedPreset() === 'motion' ? 900 : 1080,
     });
     myBroadcast?.setCameraLayout({
       position: $('mCameraPosition').value,
@@ -2517,6 +2518,7 @@ $('modalGo').addEventListener('click', async () => {
   url.searchParams.set('camPos', $('mCameraPosition').value);
   url.searchParams.set('camSize', $('mCameraSize').value);
   url.searchParams.set('eco', $('mEconomy').checked ? '1' : '0');
+  url.searchParams.set('content', selectedPreset() === 'motion' ? 'motion' : 'text');
   if (mobileDevice) url.searchParams.set('source', 'camera');
 
   if (inDiscord) {

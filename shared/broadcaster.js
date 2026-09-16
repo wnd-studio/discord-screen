@@ -13,6 +13,8 @@
 // a 1080p derruba o framerate. Por isso as duas variantes de H264 vêm antes:
 // annexb dispensa o blob `description`, e avcC é aceito onde annexb não é.
 const CANDIDATES = [
+  { codec: 'avc1.42E02A', avc: { format: 'annexb' } },
+  { codec: 'avc1.42E02A' },
   { codec: 'avc1.42E01E', avc: { format: 'annexb' } },
   { codec: 'avc1.42E01E' },
   { codec: 'vp8' },
@@ -21,9 +23,9 @@ const CANDIDATES = [
 
 function codecCandidates() {
   const ua = navigator.userAgent;
-  if (/Firefox/i.test(ua)) return [CANDIDATES[2], CANDIDATES[1], CANDIDATES[0], CANDIDATES[3]];
+  if (/Firefox/i.test(ua)) return [CANDIDATES[4], CANDIDATES[1], CANDIDATES[0], CANDIDATES[5]];
   if (/Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR/i.test(ua)) {
-    return [CANDIDATES[1], CANDIDATES[0], CANDIDATES[2], CANDIDATES[3]];
+    return [CANDIDATES[1], CANDIDATES[0], CANDIDATES[4], CANDIDATES[5]];
   }
   return CANDIDATES;
 }
@@ -94,6 +96,7 @@ export function compatibilityInfo() {
  * @param {boolean} [opts.audio]     capturar também o som do computador
  * @param {boolean} [opts.camera]    mostrar a câmera sobre a tela
  * @param {'screen'|'camera'} [opts.captureMode] fonte principal do vídeo
+ * @param {'text'|'motion'} [opts.contentType] conteúdo priorizado pelo encoder
  * @param {'user'|'environment'} [opts.facingMode] câmera frontal ou traseira
  * @param {number} [opts.maxWidth] resolução máxima codificada
  * @param {number} [opts.maxHeight] resolução máxima codificada
@@ -118,6 +121,7 @@ export function createBroadcaster({
   audio = false,
   camera = false,
   captureMode = 'screen',
+  contentType = 'text',
   facingMode = 'user',
   maxWidth = MAX_W,
   maxHeight = MAX_H,
@@ -213,7 +217,7 @@ export function createBroadcaster({
     const track = stream.getVideoTracks()[0];
     // Diz ao encoder que o conteúdo é tela (texto/UI), não vídeo natural —
     // preserva nitidez das bordas em vez de suavizar.
-    track.contentHint = captureMode === 'camera' ? 'motion' : 'text';
+    track.contentHint = captureMode === 'camera' || contentType === 'motion' ? 'motion' : 'text';
     track.addEventListener('ended', () => stop(captureMode === 'camera' ? 'A câmera foi encerrada.' : 'Você parou o compartilhamento pelo navegador.'));
 
     if (camera && captureMode !== 'camera') {
@@ -653,10 +657,13 @@ export function createBroadcaster({
   async function pickConfig(width, height) {
     // Duas passadas: navegadores que não conhecem `latencyMode` podem recusar a
     // configuração inteira por causa dela. Mais latência é melhor que nada.
-    for (const realtime of [true, false]) {
+    for (const tuning of [
+      { latencyMode: 'realtime', hardwareAcceleration: 'prefer-hardware', bitrateMode: contentType === 'motion' ? 'variable' : 'constant' },
+      { latencyMode: 'realtime' },
+      {},
+    ]) {
       for (const candidate of codecCandidates()) {
-        const cfg = { ...candidate, width, height, bitrate, framerate: fps };
-        if (realtime) cfg.latencyMode = 'realtime';
+        const cfg = { ...candidate, width, height, bitrate, framerate: fps, ...tuning };
         try {
           if (typeof VideoEncoder.isConfigSupported !== 'function') return cfg;
           const { supported } = await VideoEncoder.isConfigSupported(cfg);
@@ -896,7 +903,8 @@ export function createBroadcaster({
     // FPS baixo também pode significar uma tela parada, não sobrecarga. Quadro
     // descartado por fila cheia é o sinal confiável de que o encoder perdeu o
     // ritmo, então só ele aciona a redução.
-    const overloaded = dropRate > 0.15;
+    const captureStarved = contentType === 'motion' && received < Math.max(10, fps * 0.62);
+    const overloaded = dropRate > 0.10 || captureStarved;
     overloadedSeconds = overloaded ? overloadedSeconds + 1 : 0;
     stableSeconds = !overloaded && dropRate < 0.03 ? stableSeconds + 1 : 0;
 
@@ -918,14 +926,14 @@ export function createBroadcaster({
   }
 
   function adaptiveSettings() {
-    // Sob carga, reduzir FPS alivia o encoder sem transformar texto e jogos em
-    // uma imagem borrada. Resolução e bitrate escolhidos pelo usuário ficam
-    // preservados em todos os níveis.
+    // Jogos disputam GPU com o encoder. Reduzir somente FPS mantinha todos os
+    // pixels de 1080p e não resolvia a fila; escalas progressivas recuperam a
+    // fluidez e retornam à qualidade escolhida quando a máquina estabiliza.
     const levels = [
       { fps: requestedFps, scale: 1, bitrate: requestedBitrate },
-      { fps: Math.min(requestedFps, 30), scale: 1, bitrate: requestedBitrate },
-      { fps: Math.min(requestedFps, 24), scale: 1, bitrate: requestedBitrate },
-      { fps: Math.min(requestedFps, 15), scale: 1, bitrate: requestedBitrate },
+      { fps: Math.min(requestedFps, contentType === 'motion' ? 45 : 30), scale: contentType === 'motion' ? 0.9 : 1, bitrate: requestedBitrate * 0.9 },
+      { fps: Math.min(requestedFps, 30), scale: contentType === 'motion' ? 0.75 : 0.9, bitrate: requestedBitrate * 0.72 },
+      { fps: Math.min(requestedFps, 20), scale: contentType === 'motion' ? 0.66 : 0.75, bitrate: requestedBitrate * 0.55 },
     ];
     const current = levels[adaptiveLevel];
     return {
@@ -1208,7 +1216,7 @@ export function createBroadcaster({
 
     stream = fresh;
     const track = fresh.getVideoTracks()[0];
-    track.contentHint = 'text';
+    track.contentHint = contentType === 'motion' ? 'motion' : 'text';
     track.addEventListener('ended', () => stop('Você parou o compartilhamento pelo navegador.'));
 
     // Encerra o loop anterior antes de abrir outro, senão os dois disputam o
@@ -1323,6 +1331,7 @@ export function createBroadcaster({
     cameraSize,
     cameraDeviceId,
     captureMode,
+    contentType,
     facingMode,
     maxWidth,
     maxHeight,
